@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DepEd Educator Portal</title>
+    <!-- 1. Load the official Google Identity Services script -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        :root {
+            --primary: #0d47a1; /* Classic DepEd Blue tint */
+            --primary-light: #e3f2fd;
+            --text-main: #2c3e50;
+            --text-muted: #64748b;
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            --transition: all 0.2s ease-in-out;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            line-height: 1.5;
+        }
+
+        /* --- Header & Layout --- */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .logo-area h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: -0.025em;
+        }
+
+        .logo-area p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Right Side: Google Sign In Container */
+        .auth-area {
+            display: flex;
+            align-items: center;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 3rem auto;
+            padding: 0 1.5rem;
+        }
+
+        .welcome-hero {
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        .welcome-hero h2 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .welcome-hero p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        /* --- Grid & Cards --- */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+            border-color: #cbd5e1;
+        }
+
+        .card-content h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.75rem;
+        }
+
+        .card-content p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary);
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            transition: var(--transition);
+            width: 100%;
+        }
+
+        .card-action:hover {
+            background-color: #1565c0;
+        }
+
+        /* Custom treatment for Google Sign-In placeholder style link */
+        .card.auth-card {
+            border-style: dashed;
+            background-color: #f8fafc;
+        }
+
+        /* Responsive modifications */
+        @media (max-width: 640px) {
+            header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            main {
+                margin: 1.5rem auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 2. Configuration for Sign-In with Google -->
+    <!-- REPLACE 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com' with your code from Google Console -->
+    <div id="g_id_onload"
+         data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+         data-context="signin"
+         data-ux_mode="popup"
+         data-callback="handleCredentialResponse"
+         data-auto_prompt="false">
+    </div>
+
+    <!-- Top Navigation Header -->
+    <header>
+        <div class="logo-area">
+            <h1>Teacher Tools Hub</h1>
+            <p>DepEd Resource & Analysis Portal</p>
+        </div>
+        
+        <!-- Top Right Anchor for Google Sign-In -->
+        <div class="auth-area">
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-shape="pill"
+                 data-theme="outline"
+                 data-text="signin_with"
+                 data-size="medium"
+                 data-logo_alignment="left">
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="welcome-hero">
+            <h2>Applications Dashboard</h2>
+            <p>Select a utility below to launch the specific generator or workbook template.</p>
+        </div>
+
+        <!-- Dashboard Tool Cards Grid -->
+        <div class="tools-grid">
+            
+            <!-- Tool 1: ILAW Lesson Plan Generator -->
+            <div class="card">
+                <div class="card-content">
+                    <h3>ILAW Lesson Plan Generator</h3>
+                    <p>Generate standardized DepEd lesson plans using the official interactive ILAW framework structure smoothly.</p>
+                </div>
+                <a href="Official DepEd ILAW Lesson Plan Generator.html" class="card-action">Launch Generator</a>
+            </div>
+
+            <!-- Tool 2: MPS Generator -->
+            <div class="card">
+                <div class="card-content">
+                    <h3>MPS Generator</h3>
+                    <p>Calculate Mean Percentage Score (MPS) formulas efficiently for quarterly assessments and standard testing metrics.</p>
+                </div>
+                <a href="MPS Generator.html" class="card-action">Launch MPS Tool</a>
+            </div>
+
+            <!-- Tool 3: Item Analysis -->
+            <div class="card">
+                <div class="card-content">
+                    <h3>Item Analysis v2.0</h3>
+                    <p>Evaluate examination quality by computing difficulty index and discrimination index factors per question.</p>
+                </div>
+                <a href="item_analysis v2.0.html" class="card-action">Launch Analysis v2.0</a>
+            </div>
+
+            <!-- Tool 4: Google Auth Independent Page Reference -->
+            <div class="card auth-card">
+                <div class="card-content">
+                    <h3>Google Button Page</h3>
+                    <p>View the dedicated standalone configuration prototype template for your secure sign-in scripts.</p>
+                </div>
+                <a href="Sign in with Google button.html" class="card-action" style="background-color: #475569;">Open Separate Button Page</a>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Handle Token Response -->
+    <script>
+        function handleCredentialResponse(response) {
+            // Front-end capture of user token data
+            const payload = parseJwt(response.credential);
+            console.log("Logged in user:", payload);
+            alert(`Welcome back, ${payload.name}! Portal authentication verified.`);
+        }
+
+        function parseJwt(token) {
+            var base64Url = token.split('.')[1];
+            var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+                return '%' + ('0' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
+    </script>
+</body>
+</html>
