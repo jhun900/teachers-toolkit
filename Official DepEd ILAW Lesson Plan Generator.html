@@ -100,10 +100,8 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Learning Area / Subject <span class="required">*</span></label>
-                        <select id="subject" class="form-input" required>
-                            <option value="" selected>Select Subject</option>
-                        </select>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Learning Area / Subject</label>
+                        <input type="text" id="subject" class="form-input" placeholder="e.g., Mathematics, Filipino">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Hours per Session</label>
@@ -205,8 +203,8 @@
     <script>
         // --- PAYMONGO & SUPABASE CREDIT SYSTEM SETUP ---
         // Replace with your actual Supabase project keys
-        const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
-        const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+        const SUPABASE_URL = 'https://pxuzrjppausjldkyfpbe.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4dXpyanBwYXVzamxka3lmcGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTUzMDcsImV4cCI6MjA5OTQzMTMwN30.alC3JldmwWoR9x2k1BnjyNuZcaDTk_-V2VtPdFh56sk';
         
         // Initialize Supabase (Mocked connection for structure)
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -267,42 +265,6 @@
         }
 
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
-
-        // --- NEW SUPABASE EDGE FUNCTION CHECKOUT LOGIC ---
-        // 1. Paste your Supabase Edge Function URL here
-        const edgeFunctionUrl = "https://pxuzrjppausjldkyfpbe.supabase.co/functions/v1/bright-service";
-
-        // 2. This is the function that runs when your customer clicks "Pay" or "Checkout"
-        async function handleCheckout() {
-            try {
-                // We send a request to your Supabase Edge Function
-                const response = await fetch(edgeFunctionUrl, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        amount: 50000, // Matched to PHP 500.00 for the top-up
-                        description: "500 App Credits"
-                    })
-                });
-
-                const data = await response.json();
-
-                // 3. If successful, redirect the customer to the PayMongo page
-                if (data.checkoutUrl) {
-                    window.location.href = data.checkoutUrl;
-                } else {
-                    // If there is an error, log it to the console
-                    console.error("Error creating checkout link:", data.error);
-                    alert("Something went wrong with the payment setup.");
-                }
-                
-            } catch (error) {
-                console.error("Fetch error:", error);
-                alert("Could not connect to the payment server.");
-            }
-        }
         
         // 4. PayMongo / Supabase Edge Function Trigger
         document.getElementById('purchaseBtn').addEventListener('click', async () => {
@@ -312,58 +274,56 @@
             btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Preparing Checkout...';
             btn.disabled = true;
 
-            // Call the live checkout function
-            await handleCheckout();
+            try {
+                // Call your custom backend endpoint that builds the PayMongo Link payload
+                /* Real Backend implementation:
+                const response = await fetch('https://pxuzrjppausjldkyfpbe.supabase.co/functions/v1/bright-service', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUserId,
+                        amount: 50000,          // 500.00 PHP in cents
+                        creditsToAdd: 500,      // Custom metadata for the Webhook to read
+                        description: "500 App Credits"
+                    })
+                });
 
-            // Reset button if the user is not instantly redirected or if an error occurs
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+                const data = await response.json();
+                
+                // Redirect user to the PayMongo GCash/Maya portal
+                window.location.href = data.checkout_url; 
+                */
+
+                // Simulated interaction for demo
+                alert("Redirecting to PayMongo Checkout...\n\n(Once paid, PayMongo triggers the Supabase Webhook to add the credits directly to your database.)");
+                modal.classList.add('hidden');
+
+            } catch (error) {
+                console.error("Payment initiation error:", error);
+                alert("Could not load payment gateway.");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         });
-
-        const subjectsDB = {
-            "K": ["Mother Tongue", "Oral Language", "Phonological Awareness", "Beginning Reading", "Mathematics", "Makabansa"],
-            "1": ["Mother Tongue", "Filipino", "English", "Mathematics", "Araling Panlipunan", "MAPEH", "Edukasyon sa Pagpapakatao"],
-            "2": ["Mother Tongue", "Filipino", "English", "Mathematics", "Araling Panlipunan", "MAPEH", "Edukasyon sa Pagpapakatao"],
-            "3": ["Mother Tongue", "Filipino", "English", "Mathematics", "Araling Panlipunan", "Science", "MAPEH", "Edukasyon sa Pagpapakatao"],
-            "4": ["Filipino", "English", "Mathematics", "Science", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "MAPEH", "Technology and Livelihood Education"],
-            "5": ["Filipino", "English", "Mathematics", "Science", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "MAPEH", "Technology and Livelihood Education"],
-            "6": ["Filipino", "English", "Mathematics", "Science", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "MAPEH", "Technology and Livelihood Education"],
-            "7": ["Filipino", "English", "Mathematics", "Science", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "MAPEH", "Technology and Livelihood Education"],
-            "8": ["Filipino", "English", "Mathematics", "Science", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "MAPEH", "Technology and Livelihood Education"],
-            "9": ["Filipino", "English", "Mathematics", "Science", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "MAPEH", "Technology and Livelihood Education"],
-            "10": ["Filipino", "English", "Mathematics", "Science", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "MAPEH", "Technology and Livelihood Education"],
-            "11": ["Oral Communication", "Reading and Writing", "Komunikasyon at Pananaliksik", "21st Century Literature", "Personal Development"],
-            "12": ["Inquiries, Investigations and Immersion", "Work Immersion", "Specialized Subjects"]
-        };
 
         const MISTRAL_API_KEY = "YxzTi7XRyqOtSX1rn2JPSbLd42nzMCKj";
         const MISTRAL_MODEL = "mistral-small-latest";
 
         function initSubjectDropdown() {
-            const gradeSelect = document.getElementById('grade');
-            const subjectSelect = document.getElementById('subject');
+            const subjectInput = document.getElementById('subject');
             const langSelect = document.getElementById('instructionalLang');
             
-            gradeSelect.addEventListener('change', function() {
-                const g = this.value;
-                subjectSelect.innerHTML = '<option value="" selected>Select Subject</option>';
-                if (g && subjectsDB[g]) {
-                    subjectsDB[g].forEach(subj => {
-                        const opt = document.createElement('option');
-                        opt.value = subj;
-                        opt.textContent = subj;
-                        subjectSelect.appendChild(opt);
-                    });
-                }
-            });
-
-            subjectSelect.addEventListener('change', function() {
-                const s = this.value;
+            // Adjusted event listener for text input instead of select
+            subjectInput.addEventListener('input', function() {
+                const s = this.value.trim().toLowerCase();
                 if (!s) return;
-                const filipinoSubjects = ["Filipino", "Makabansa", "Araling Panlipunan", "Edukasyon sa Pagpapakatao", "Komunikasyon at Pananaliksik"];
+                
+                const filipinoSubjects = ["filipino", "makabansa", "araling panlipunan", "edukasyon sa pagpapakatao", "komunikasyon at pananaliksik"];
+                
                 if (filipinoSubjects.includes(s)) {
                     langSelect.value = "Filipino";
-                } else if (s === "Mother Tongue") {
+                } else if (s === "mother tongue") {
                     langSelect.value = "Mother Tongue";
                 } else {
                     langSelect.value = "English";
@@ -386,11 +346,12 @@
             if (!hasEnoughCredits()) return;
 
             const grade = document.getElementById('grade').value;
-            const subject = document.getElementById('subject').value;
+            const subject = document.getElementById('subject').value || "N/A"; // fallback for non-required
             const targetLang = document.getElementById('instructionalLang').value;
             const competency = document.getElementById('competency').value.trim();
 
-            if (!grade || !subject || !competency || !targetLang) {
+            // Removed `!subject` from validation since it is no longer required
+            if (!grade || !competency || !targetLang) {
                 alert('Please fill out all mandatory fields marked with an asterisk (*). All inputs remain blank by default.');
                 return;
             }
