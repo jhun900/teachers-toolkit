@@ -255,7 +255,10 @@
             try {
                 const response = await fetch('https://pxuzrjppausjldkyfpbe.supabase.co/functions/v1/bright-service', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    },
                     body: JSON.stringify({
                         userId: currentUserId,
                         amount: 50000,          
@@ -265,7 +268,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to create checkout session.');
+                    const errorDetails = await response.text();
+                    throw new Error(`Server returned ${response.status}: ${errorDetails}`);
                 }
 
                 const data = await response.json();
@@ -279,7 +283,7 @@
 
             } catch (error) {
                 console.error("Payment initiation error:", error);
-                alert("Could not load payment gateway. Please try again.");
+                alert(`Could not load payment gateway.\nReason: ${error.message}`);
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
