@@ -393,11 +393,18 @@
 
     <script>
         // --- 1. Supabase Infrastructure ---
-        const SUPABASE_URL = 'knfpnuofjxihwutuzbnd';
+        // Resolved variable naming collision and appended the required valid URL formatting protocols
+        const SUPABASE_URL = 'https://knfpnuofjxihwutuzbnd.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZnBudW9manhpaHd1dHV6Ym5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzU2MTksImV4cCI6MjA5OTM1MTYxOX0.vqhn-f8ZXZjLgbgvnagRehiL-v0zhTi5G8w863iBHlY';
-        let supabase = null;
+        let supabaseClient = null;
         
-        try { supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {}
+        try { 
+            if (window.supabase) {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); 
+            }
+        } catch(e) {
+            console.error("Supabase initialization error caught: ", e);
+        }
 
         let currentCredits = 0;
         let authenticatedUserEmail = "";
@@ -409,7 +416,7 @@
             authenticatedUserEmail = payload.email;
             isUserLoggedIn = true; 
 
-            // UI Transformations
+            // UI Transformations - Explicitly force remove unauthenticated banners immediately
             document.getElementById('google_btn_wrapper').style.display = 'none';
             document.getElementById('auth_banner').style.display = 'none';
             document.getElementById('user_avatar').src = payload.picture;
@@ -431,16 +438,16 @@
             updateCreditsDisplay();
 
             // Background Remote Persistence Sync 
-            if(supabase) {
+            if(supabaseClient) {
                 try {
-                    const { data } = await supabase.from('profiles').select('credits').eq('email', payload.email).single();
+                    const { data } = await supabaseClient.from('profiles').select('credits').eq('email', payload.email).single();
                     if (data) {
                         currentCredits = data.credits;
                         updateCreditsDisplay();
                     } else {
-                        await supabase.from('profiles').insert([{ email: payload.email, name: payload.name, credits: currentCredits }]);
+                        await supabaseClient.from('profiles').insert([{ email: payload.email, name: payload.name, credits: currentCredits }]);
                     }
-                } catch (err) { console.warn("Supabase context offline: working out of cache."); }
+                } catch (err) { console.warn("Supabase context working out of local storage backup."); }
             }
         }
 
@@ -521,8 +528,8 @@
                 currentCredits -= 1;
                 updateCreditsDisplay();
 
-                if (supabase && authenticatedUserEmail) {
-                    await supabase.from('profiles').update({ credits: currentCredits }).eq('email', authenticatedUserEmail);
+                if (supabaseClient && authenticatedUserEmail) {
+                    await supabaseClient.from('profiles').update({ credits: currentCredits }).eq('email', authenticatedUserEmail);
                 }
 
                 window.location.href = targetUrl;
@@ -536,8 +543,8 @@
             updateCreditsDisplay();
             closeModal();
 
-            if (supabase && authenticatedUserEmail) {
-                await supabase.from('profiles').update({ credits: currentCredits }).eq('email', authenticatedUserEmail);
+            if (supabaseClient && authenticatedUserEmail) {
+                await supabaseClient.from('profiles').update({ credits: currentCredits }).eq('email', authenticatedUserEmail);
             }
 
             alert(`Payment Success! Your transaction was finalized. ${addedTokens} tokens applied to your wallet.`);
