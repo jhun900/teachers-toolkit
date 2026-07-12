@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
-            --primary: #0d47a1; /* Classic DepEd Blue tint */
+            --primary: #0d47a1; /* Classic DepEd Blue */
             --primary-light: #e3f2fd;
             --text-main: #2c3e50;
             --text-muted: #64748b;
@@ -31,7 +31,6 @@
             background-color: var(--bg-page);
             color: var(--text-main);
             line-height: 1.5;
-            position: relative;
             min-height: 100vh;
         }
 
@@ -61,7 +60,6 @@
             color: var(--text-muted);
         }
 
-        /* Dynamic Right-Aligned Anchor */
         .auth-area {
             display: flex;
             align-items: center;
@@ -71,7 +69,7 @@
         }
 
         .profile-display {
-            display: none; /* Controlled dynamically via JS */
+            display: none; /* Controlled via JS */
             align-items: center;
             gap: 0.75rem;
             background: #f1f5f9;
@@ -107,55 +105,21 @@
             white-space: nowrap;
         }
 
-        /* --- Access Lock Mechanism --- */
-        .blur-lock {
-            filter: blur(6px);
-            pointer-events: none;
-            user-select: none;
-        }
-
-        .lock-overlay {
-            position: fixed;
-            top: 73px; 
-            left: 0;
-            width: 100%;
-            height: calc(100vh - 73px);
-            background: rgba(248, 250, 252, 0.85);
-            backdrop-filter: blur(2px);
-            z-index: 90;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
+        /* --- Banner Notification --- */
+        .auth-banner {
+            background-color: #fffbeb;
+            border-bottom: 1px solid #fef3c7;
+            color: #b45309;
+            padding: 0.75rem 2rem;
             text-align: center;
-        }
-
-        .lock-card {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            max-width: 450px;
-        }
-
-        .lock-card h3 {
-            font-size: 1.5rem;
-            color: #1e293b;
-            margin-bottom: 0.75rem;
-        }
-
-        .lock-card p {
-            color: var(--text-muted);
-            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
         }
 
         main {
             max-width: 1200px;
-            margin: 3rem auto;
+            margin: 2rem auto 4rem auto;
             padding: 0 1.5rem;
-            transition: filter 0.3s ease;
         }
 
         .welcome-hero {
@@ -239,7 +203,7 @@
             background-color: #f8fafc;
         }
 
-        /* --- Payment Modal Pop-up --- */
+        /* --- Unified Modals System --- */
         .modal-back-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -250,29 +214,82 @@
             align-items: center;
             justify-content: center;
         }
+        
         .modal-box {
             background: white;
             padding: 2.5rem;
             border-radius: 16px;
-            max-width: 400px;
+            max-width: 480px;
             width: 90%;
-            text-align: center;
             box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            text-align: center;
         }
-        .modal-box h3 { color: #ef4444; margin-bottom: 0.5rem; font-size: 1.5rem;}
-        .modal-box p { color: var(--text-muted); margin-bottom: 1.5rem; }
-        .buy-btn {
-            background: #22c55e; color: white; border: none; padding: 0.75rem 1.5rem;
-            font-weight: 600; border-radius: 8px; cursor: pointer; width: 100%; margin-bottom: 0.5rem;
+
+        .modal-box h3 { 
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #1e293b;
         }
-        .buy-btn:hover { background: #16a34a; }
+
+        .modal-box p { 
+            color: var(--text-muted); 
+            margin-bottom: 1.5rem; 
+            font-size: 0.95rem;
+        }
+
+        /* --- Credit Bundle Offers --- */
+        .pricing-tier {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            text-align: left;
+            transition: var(--transition);
+        }
+
+        .pricing-tier:hover {
+            border-color: #22c55e;
+            background-color: #f0fdf4;
+        }
+
+        .tier-details h4 {
+            color: #1e293b;
+            font-size: 1.05rem;
+        }
+
+        .tier-details span {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .tier-buy-btn {
+            background: #22c55e;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .tier-buy-btn:hover { background: #16a34a; }
+
         .close-btn {
-            background: none; color: var(--text-muted); border: none; font-size: 0.85rem; cursor: pointer; text-decoration: underline;
+            background: none; 
+            color: var(--text-muted); 
+            border: none; 
+            font-size: 0.85rem; 
+            cursor: pointer; 
+            text-decoration: underline;
+            margin-top: 1rem;
         }
 
         @media (max-width: 640px) {
             header { flex-direction: column; gap: 1rem; text-align: center; }
-            .lock-overlay { top: 120px; height: calc(100vh - 120px); }
             main { margin: 1.5rem auto; }
             .auth-area { justify-content: center; }
         }
@@ -296,9 +313,7 @@
             <p>DepEd Resource & Analysis Portal</p>
         </div>
         
-        <!-- Identity Placement Node -->
         <div class="auth-area">
-            <!-- Google Button Wrapper -->
             <div id="google_btn_wrapper">
                 <div class="g_id_signin"
                      data-type="standard"
@@ -310,7 +325,6 @@
                 </div>
             </div>
 
-            <!-- User Profile Display -->
             <div id="user_profile_wrapper" class="profile-display">
                 <img id="user_avatar" src="" alt="User Avatar">
                 <span id="user_profile_name" class="user-name">Educator</span>
@@ -319,16 +333,13 @@
         </div>
     </header>
 
-    <!-- Visual Access Lock Overlay -->
-    <div id="portal_lock" class="lock-overlay">
-        <div class="lock-card" id="lock_card_content">
-            <h3>🔒 Portal Access Locked</h3>
-            <p>Please sign in with your Google account using the button at the top right corner to unlock your educator modules and claim your 5 free workspace tokens.</p>
-        </div>
+    <!-- Notice Banner for Unauthenticated Users -->
+    <div id="auth_banner" class="auth-banner">
+        💡 You are previewing the tools catalog. Please sign in above to activate your 5 free welcome credits and start exporting.
     </div>
 
-    <!-- Main Content Panel -->
-    <main id="main_content" class="blur-lock">
+    <!-- Main Content Panel (Fully visible from start) -->
+    <main id="main_content">
         <div class="welcome-hero">
             <h2>Applications Dashboard</h2>
             <p>Select a utility below to launch. Simulating an export operation will deduct 1 credit.</p>
@@ -373,116 +384,163 @@
         </div>
     </main>
 
-    <!-- Out of Credits Alert Modal -->
-    <div id="payment_modal" class="modal-back-overlay">
-        <div class="modal-box">
-            <h3>Credits Exhausted!</h3>
-            <p>You have used all your remaining credits. Please top up your wallet allocation to continue exporting premium file templates from this dashboard.</p>
-            <button class="buy-btn" onclick="buyCreditsMock()">Buy 20 Credits for ₱100</button>
-            <br>
-            <button class="close-btn" onclick="toggleModal(false)">Close Window</button>
+    <!-- Global Unified Custom Dialog Overlay -->
+    <div id="portal_modal" class="modal-back-overlay">
+        <div class="modal-box" id="modal_content_area">
+            <!-- Dynamic Injection Zone -->
         </div>
     </div>
 
     <script>
-        // --- 1. Supabase Initialization Setup ---
+        // --- 1. Supabase Infrastructure ---
         const SUPABASE_URL = 'knfpnuofjxihwutuzbnd';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZnBudW9manhpaHd1dHV6Ym5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzU2MTksImV4cCI6MjA5OTM1MTYxOX0.vqhn-f8ZXZjLgbgvnagRehiL-v0zhTi5G8w863iBHlY';
         let supabase = null;
         
-        try {
-            supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        } catch(e) {
-            console.warn("Supabase reference ready. Awaiting production configuration keys.");
-        }
+        try { supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {}
 
         let currentCredits = 0;
         let authenticatedUserEmail = "";
         let isUserLoggedIn = false;
 
-        // --- 2. Google OAuth Token Processing Flow ---
+        // --- 2. Identity Processing Handlers ---
         async function handleCredentialResponse(response) {
             const payload = parseJwt(response.credential);
-            console.log("Validated login payload details:", payload);
-            
             authenticatedUserEmail = payload.email;
             isUserLoggedIn = true; 
 
-            // 1. UPDATE UPPER INTERFACE INSTANTLY (Zero delay)
+            // UI Transformations
             document.getElementById('google_btn_wrapper').style.display = 'none';
+            document.getElementById('auth_banner').style.display = 'none';
             document.getElementById('user_avatar').src = payload.picture;
             document.getElementById('user_profile_name').textContent = payload.name;
             document.getElementById('user_profile_wrapper').style.display = 'flex';
 
-            // 2. RETRIEVE CACHED CREDITS LOCALLY FIRST TO EXPEDITE UNLOCK PHASE
+            // Check existing profile records
             let userWalletKey = `credits_pool_${payload.email}`;
-            let locallyStoredCredits = localStorage.getItem(userWalletKey);
+            let cachedBalance = localStorage.getItem(userWalletKey);
             
-            // Set temporary clean state fallback so layout opens right away
-            currentCredits = locallyStoredCredits !== null ? parseInt(locallyStoredCredits) : 5;
-            updateCreditsDisplay(); // <-- Drops portal access constraints immediately!
+            if (cachedBalance !== null) {
+                currentCredits = parseInt(cachedBalance);
+            } else {
+                // Fresh user gets the welcome login bonus package
+                currentCredits = 5;
+                showWelcomeBonusModal();
+            }
+            
+            updateCreditsDisplay();
 
-            // 3. LAUNCH EXTERNAL DATABASE RESOLUTIONS AS AN ASYNC BACKGROUND JOB
-            synchronizeUserAccount(payload).catch(err => {
-                console.error("Background remote repository sync failed, using client fallback cache:", err);
-            });
+            // Background Remote Persistence Sync 
+            if(supabase) {
+                try {
+                    const { data } = await supabase.from('profiles').select('credits').eq('email', payload.email).single();
+                    if (data) {
+                        currentCredits = data.credits;
+                        updateCreditsDisplay();
+                    } else {
+                        await supabase.from('profiles').insert([{ email: payload.email, name: payload.name, credits: currentCredits }]);
+                    }
+                } catch (err) { console.warn("Supabase context offline: working out of cache."); }
+            }
         }
 
-        // --- 3. Supabase / Local Storage Background Synchronization ---
-        async function synchronizeUserAccount(userPayload) {
-            if (!supabase) return;
+        // --- 3. Custom Modal View Composers ---
+        function openModalLayout(htmlContent) {
+            document.getElementById('modal_content_area').innerHTML = htmlContent;
+            document.getElementById('portal_modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('portal_modal').style.display = 'none';
+        }
+
+        function showWelcomeBonusModal() {
+            openModalLayout(`
+                <h3 style="color: #22c55e;">🎉 Welcome Bonus Activated!</h3>
+                <p>Thank you for logging in with your Google Workspace. We've credited your account balance with <strong>5 free export tokens</strong> to help you get started.</p>
+                <button class="card-action" onclick="closeModal()">Explore Dashboard</button>
+            `);
+        }
+
+        function showUnauthenticatedModal() {
+            openModalLayout(`
+                <h3>🔒 Authentication Required</h3>
+                <p>You can browse all available administrative utilities, but exporting files requires an authenticated profile connection. Please log in using the Google button at the top right to claim your 5 free tokens.</p>
+                <button class="card-action" style="background-color: #64748b;" onclick="closeModal()">Dismiss</button>
+            `);
+        }
+
+        function showPricingModal() {
+            openModalLayout(`
+                <h3 style="color: #ef4444;">⚠️ Zero Balance</h3>
+                <p>Your workspace tokens are fully exhausted. Select a premium file token bundle below to resume exporting templates instantly.</p>
+                
+                <div class="pricing-tier">
+                    <div class="tier-details">
+                        <h4>Starter Pack (10 Credits)</h4>
+                        <span>Ideal for standard weekly processing</span>
+                    </div>
+                    <button class="tier-buy-btn" onclick="executeMockPurchase(10, 50)">₱50</button>
+                </div>
+
+                <div class="pricing-tier">
+                    <div class="tier-details">
+                        <h4>Value Choice (25 Credits)</h4>
+                        <span>Perfect for grading periods & MPS sheets</span>
+                    </div>
+                    <button class="tier-buy-btn" onclick="executeMockPurchase(25, 100)">₱100</button>
+                </div>
+
+                <div class="pricing-tier">
+                    <div class="tier-details">
+                        <h4>Institutional Bundle (60 Credits)</h4>
+                        <span>Best long-term coverage for teachers</span>
+                    </div>
+                    <button class="tier-buy-btn" onclick="executeMockPurchase(60, 200)">₱200</button>
+                </div>
+                
+                <button class="close-btn" onclick="closeModal()">Close Window</button>
+            `);
+        }
+
+        // --- 4. Content Exports & Transaction Logic ---
+        async function handleToolExport(targetUrl) {
+            if (!isUserLoggedIn) {
+                showUnauthenticatedModal();
+                return;
+            }
+
+            if (currentCredits <= 0) {
+                showPricingModal();
+                return;
+            }
 
             try {
-                const { data, error } = await supabase
-                    .from('profiles')
-                    .select('credits')
-                    .eq('email', userPayload.email)
-                    .single();
+                alert(`Export processing successful! Discharging template file data: ${targetUrl}`);
+                
+                currentCredits -= 1;
+                updateCreditsDisplay();
 
-                if (error && error.code === 'PGRST116') {
-                    // Entry profile row completely empty inside remote context -> Seed new DB line matching baseline cache state
-                    await supabase.from('profiles').insert([
-                        { email: userPayload.email, name: userPayload.name, credits: currentCredits }
-                    ]);
-                } else if (data) {
-                    // Match found on table servers -> Fetch latest server profiles downstream to local variables
-                    currentCredits = data.credits;
-                    localStorage.setItem(`credits_pool_${userPayload.email}`, currentCredits);
-                    updateCreditsDisplay(); // Silently match UI alignment changes post-fetch
+                if (supabase && authenticatedUserEmail) {
+                    await supabase.from('profiles').update({ credits: currentCredits }).eq('email', authenticatedUserEmail);
                 }
+
+                window.location.href = targetUrl;
             } catch (err) {
-                console.error("Supabase sync transaction boundary bypassed:", err);
+                console.error(err);
             }
         }
 
-        // --- 4. Centralized Access State Manager ---
-        function refreshPortalState() {
-            const portalLock = document.getElementById('portal_lock');
-            const mainContent = document.getElementById('main_content');
-            const lockCardContent = document.getElementById('lock_card_content');
+        async function executeMockPurchase(addedTokens, price) {
+            currentCredits += addedTokens;
+            updateCreditsDisplay();
+            closeModal();
 
-            if (!isUserLoggedIn) {
-                // State A: Prompt for initial login
-                portalLock.style.display = 'flex';
-                mainContent.classList.add('blur-lock');
-                lockCardContent.innerHTML = `
-                    <h3>🔒 Portal Access Locked</h3>
-                    <p>Please sign in with your Google account using the button at the top right corner to unlock your educator modules and claim your 5 free workspace tokens.</p>
-                `;
-            } else if (currentCredits <= 0) {
-                // State B: Block if balance runs completely dry post-login
-                portalLock.style.display = 'flex';
-                mainContent.classList.add('blur-lock');
-                lockCardContent.innerHTML = `
-                    <h3>⚠️ Balance Exhausted</h3>
-                    <p>Your dashboard workspace is locked because your file tokens reached 0. Please select a premium credit package or tap the recharge option to resume using tools.</p>
-                    <button class="buy-btn" onclick="buyCreditsMock()">Buy 20 Credits for ₱100</button>
-                `;
-            } else {
-                // State C: Signed in + has balance -> Drop lock screens instantly
-                portalLock.style.display = 'none';
-                mainContent.classList.remove('blur-lock');
+            if (supabase && authenticatedUserEmail) {
+                await supabase.from('profiles').update({ credits: currentCredits }).eq('email', authenticatedUserEmail);
             }
+
+            alert(`Payment Success! Your transaction was finalized. ${addedTokens} tokens applied to your wallet.`);
         }
 
         function updateCreditsDisplay() {
@@ -490,54 +548,6 @@
             if (authenticatedUserEmail) {
                 localStorage.setItem(`credits_pool_${authenticatedUserEmail}`, currentCredits);
             }
-            refreshPortalState();
-        }
-
-        // --- 5. Content Exports & Transaction Logic ---
-        async function handleToolExport(targetUrl) {
-            if (currentCredits <= 0) {
-                toggleModal(true);
-                return;
-            }
-
-            try {
-                alert(`Export successful! Accessing: ${targetUrl}`);
-                
-                currentCredits -= 1;
-                updateCreditsDisplay();
-
-                if (supabase && authenticatedUserEmail) {
-                    await supabase
-                        .from('profiles')
-                        .update({ credits: currentCredits })
-                        .eq('email', authenticatedUserEmail);
-                }
-
-                window.location.href = targetUrl;
-
-            } catch (err) {
-                console.error("Export process handling fault detected: ", err);
-                alert("An unexpected processing error occurred. Credits preserved.");
-            }
-        }
-
-        function toggleModal(show) {
-            document.getElementById('payment_modal').style.display = show ? 'flex' : 'none';
-        }
-
-        async function buyCreditsMock() {
-            currentCredits += 20;
-            updateCreditsDisplay();
-            toggleModal(false);
-
-            if (supabase && authenticatedUserEmail) {
-                await supabase
-                    .from('profiles')
-                    .update({ credits: currentCredits })
-                    .eq('email', authenticatedUserEmail);
-            }
-
-            alert("Top-up Complete! 20 export tokens loaded into your workspace context successfully.");
         }
 
         function parseJwt(token) {
@@ -548,9 +558,6 @@
             }).join(''));
             return JSON.parse(jsonPayload);
         }
-
-        // Set initial screen appearance layout state flags upon baseline initialization load
-        refreshPortalState();
     </script>
 </body>
 </html>
