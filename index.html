@@ -386,8 +386,8 @@
 
     <script>
         // --- 1. Supabase Initialization Setup ---
-        const SUPABASE_URL = 'https://your-project-id.supabase.co';
-        const SUPABASE_KEY = 'your-anon-public-api-key';
+        const SUPABASE_URL = 'knfpnuofjxihwutuzbnd';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZnBudW9manhpaHd1dHV6Ym5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzU2MTksImV4cCI6MjA5OTM1MTYxOX0.vqhn-f8ZXZjLgbgvnagRehiL-v0zhTi5G8w863iBHlY';
         let supabase = null;
         
         try {
@@ -406,56 +406,53 @@
             console.log("Validated login payload details:", payload);
             
             authenticatedUserEmail = payload.email;
-            isUserLoggedIn = true; // Flag true immediately on successful response validation
+            isUserLoggedIn = true; 
 
-            // Swap out UI header elements
+            // 1. UPDATE UPPER INTERFACE INSTANTLY (Zero delay)
             document.getElementById('google_btn_wrapper').style.display = 'none';
             document.getElementById('user_avatar').src = payload.picture;
             document.getElementById('user_profile_name').textContent = payload.name;
             document.getElementById('user_profile_wrapper').style.display = 'flex';
 
-            // Sync account data and trigger UI refresh inside
-            await synchronizeUserAccount(payload);
+            // 2. RETRIEVE CACHED CREDITS LOCALLY FIRST TO EXPEDITE UNLOCK PHASE
+            let userWalletKey = `credits_pool_${payload.email}`;
+            let locallyStoredCredits = localStorage.getItem(userWalletKey);
+            
+            // Set temporary clean state fallback so layout opens right away
+            currentCredits = locallyStoredCredits !== null ? parseInt(locallyStoredCredits) : 5;
+            updateCreditsDisplay(); // <-- Drops portal access constraints immediately!
+
+            // 3. LAUNCH EXTERNAL DATABASE RESOLUTIONS AS AN ASYNC BACKGROUND JOB
+            synchronizeUserAccount(payload).catch(err => {
+                console.error("Background remote repository sync failed, using client fallback cache:", err);
+            });
         }
 
-        // --- 3. Supabase / Local Storage Synchronization ---
+        // --- 3. Supabase / Local Storage Background Synchronization ---
         async function synchronizeUserAccount(userPayload) {
-            let userWalletKey = `credits_pool_${userPayload.email}`;
-            let locallyStoredCredits = localStorage.getItem(userWalletKey);
+            if (!supabase) return;
 
-            if (locallyStoredCredits === null) {
-                // First-time login ever: Allocate 5 welcome bonus credits
-                currentCredits = 5;
-                localStorage.setItem(userWalletKey, currentCredits);
-            } else {
-                currentCredits = parseInt(locallyStoredCredits);
-            }
+            try {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('credits')
+                    .eq('email', userPayload.email)
+                    .single();
 
-            // Sync with remote database if connection is live
-            if (supabase) {
-                try {
-                    const { data, error } = await supabase
-                        .from('profiles')
-                        .select('credits')
-                        .eq('email', userPayload.email)
-                        .single();
-
-                    if (error && error.code === 'PGRST116') {
-                        // DB Profile doesn't exist yet -> Create it
-                        await supabase.from('profiles').insert([
-                            { email: userPayload.email, name: userPayload.name, credits: currentCredits }
-                        ]);
-                    } else if (data) {
-                        currentCredits = data.credits;
-                        localStorage.setItem(userWalletKey, currentCredits);
-                    }
-                } catch (err) {
-                    console.error("Supabase synchronization skipped or failed:", err);
+                if (error && error.code === 'PGRST116') {
+                    // Entry profile row completely empty inside remote context -> Seed new DB line matching baseline cache state
+                    await supabase.from('profiles').insert([
+                        { email: userPayload.email, name: userPayload.name, credits: currentCredits }
+                    ]);
+                } else if (data) {
+                    // Match found on table servers -> Fetch latest server profiles downstream to local variables
+                    currentCredits = data.credits;
+                    localStorage.setItem(`credits_pool_${userPayload.email}`, currentCredits);
+                    updateCreditsDisplay(); // Silently match UI alignment changes post-fetch
                 }
+            } catch (err) {
+                console.error("Supabase sync transaction boundary bypassed:", err);
             }
-
-            // Apply updates to DOM elements and safely run conditional visibility shifts
-            updateCreditsDisplay();
         }
 
         // --- 4. Centralized Access State Manager ---
@@ -504,14 +501,11 @@
             }
 
             try {
-                // Perform execution action target routing
                 alert(`Export successful! Accessing: ${targetUrl}`);
                 
-                // --- DEDUCTION HAPPENS HERE IN RESPONSE TO CONFIRMED ACTION SUCCESS ---
                 currentCredits -= 1;
                 updateCreditsDisplay();
 
-                // Send network analytics transaction line data to remote table rows
                 if (supabase && authenticatedUserEmail) {
                     await supabase
                         .from('profiles')
