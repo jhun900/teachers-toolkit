@@ -267,6 +267,42 @@
         }
 
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
+
+        // --- NEW SUPABASE EDGE FUNCTION CHECKOUT LOGIC ---
+        // 1. Paste your Supabase Edge Function URL here
+        const edgeFunctionUrl = "https://pxuzrjppausjldkyfpbe.supabase.co/functions/v1/bright-service";
+
+        // 2. This is the function that runs when your customer clicks "Pay" or "Checkout"
+        async function handleCheckout() {
+            try {
+                // We send a request to your Supabase Edge Function
+                const response = await fetch(edgeFunctionUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        amount: 50000, // Matched to PHP 500.00 for the top-up
+                        description: "500 App Credits"
+                    })
+                });
+
+                const data = await response.json();
+
+                // 3. If successful, redirect the customer to the PayMongo page
+                if (data.checkoutUrl) {
+                    window.location.href = data.checkoutUrl;
+                } else {
+                    // If there is an error, log it to the console
+                    console.error("Error creating checkout link:", data.error);
+                    alert("Something went wrong with the payment setup.");
+                }
+                
+            } catch (error) {
+                console.error("Fetch error:", error);
+                alert("Could not connect to the payment server.");
+            }
+        }
         
         // 4. PayMongo / Supabase Edge Function Trigger
         document.getElementById('purchaseBtn').addEventListener('click', async () => {
@@ -276,37 +312,12 @@
             btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Preparing Checkout...';
             btn.disabled = true;
 
-            try {
-                // Call your custom backend endpoint that builds the PayMongo Link payload
-                /* Real Backend implementation:
-                const response = await fetch('YOUR_BACKEND_TO_CREATE_PAYMONGO_LINK', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId: currentUserId,
-                        amount: 50000,          // 500.00 PHP in cents
-                        creditsToAdd: 500,      // Custom metadata for the Webhook to read
-                        description: "500 App Credits"
-                    })
-                });
+            // Call the live checkout function
+            await handleCheckout();
 
-                const data = await response.json();
-                
-                // Redirect user to the PayMongo GCash/Maya portal
-                window.location.href = data.checkout_url; 
-                */
-
-                // Simulated interaction for demo
-                alert("Redirecting to PayMongo Checkout...\n\n(Once paid, PayMongo triggers the Supabase Webhook to add the credits directly to your database.)");
-                modal.classList.add('hidden');
-
-            } catch (error) {
-                console.error("Payment initiation error:", error);
-                alert("Could not load payment gateway.");
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
+            // Reset button if the user is not instantly redirected or if an error occurs
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         });
 
         const subjectsDB = {
