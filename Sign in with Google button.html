@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Sign-In Demo</title>
+    <!-- 1. Load the official Google Identity Services script -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f9f9f9;
+    }
+    .container {
+        text-align: center;
+        background: white;
+        padding: 2.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2 {
+        color: #333;
+        margin-bottom: 1.5rem;
+    }
+</style>
+<body>
+
+    <div class="container">
+        <h2>Welcome Back</h2>
+        
+        <!-- 2. The Configuration Div -->
+        <!-- Replace 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com' with your actual Client ID from Google Console -->
+        <div id="g_id_onload"
+             data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+             data-context="signin"
+             data-ux_mode="popup"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+
+        <!-- 3. The Explicit Button Render Div -->
+        <div class="g_id_signin"
+             data-type="standard"
+             data-shape="rectangular"
+             data-theme="outline"
+             data-text="signin_with"
+             data-size="large"
+             data-logo_alignment="left">
+        </div>
+    </div>
+
+    <!-- 4. Handle the JWT Token Returned by Google -->
+    <script>
+        function handleCredentialResponse(response) {
+            console.log("Encoded JWT ID token: " + response.credential);
+            
+            // To see what's inside the token locally, you can decode it like this:
+            const responsePayload = parseJwt(response.credential);
+            console.log("ID: " + responsePayload.sub);
+            console.log('Full Name: ' + responsePayload.name);
+            console.log('Given Name: ' + responsePayload.given_name);
+            console.log('Family Name: ' + responsePayload.family_name);
+            console.log("Image URL: " + responsePayload.picture);
+            console.log("Email: " + responsePayload.email);
+            
+            alert(`Hello, ${responsePayload.name}! Check your browser console to see the full JWT payload.`);
+            
+            // NEXT STEP: Send response.credential to your backend server via fetch/axios 
+            // to verify the token and log the user in securely.
+        }
+
+        // Helper function to decode the JWT token payload
+        function parseJwt (token) {
+            var base64Url = token.split('.')[1];
+            var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+                return '%' + ('0' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+
+            return JSON.parse(jsonPayload);
+        }
+    </script>
+</body>
+</html>
