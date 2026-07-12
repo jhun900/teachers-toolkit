@@ -205,7 +205,6 @@
         const SUPABASE_URL = 'https://pxuzrjppausjldkyfpbe.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4dXpyanBwYXVzamxka3lmcGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTUzMDcsImV4cCI6MjA5OTQzMTMwN30.alC3JldmwWoR9x2k1BnjyNuZcaDTk_-V2VtPdFh56sk';
         
-        // FIX: Renamed 'supabase' to 'supabaseClient' to prevent global variable collision
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         const modal = document.getElementById('buyCreditsModal');
@@ -334,7 +333,7 @@
                 return;
             }
 
-            const btn = this;
+            const btn = document.getElementById('generateBtn');
             btn.classList.add('loading');
             btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Organizing Curriculum Standards...';
             document.getElementById('outputContainer').classList.add('hidden');
@@ -357,7 +356,7 @@ The response must be a single flat JSON object structure matching the blueprint 
 
 CRITICAL INSTRUCTION FOR "lessonProper":
 Describe the classroom activities implemented from the first part to the last part of the flow to meet the objectives.
-You MUST format this field strictly as a single text block consisting of a clearly ordered NUMBERED LIST (e.g., "1. [Activity details...] \n2. [Next activity...] \n3. [Following activity...]") across the session keys (s1 to s5). 
+You MUST format this field strictly as a single text block consisting of a clearly ordered NUMBERED LIST (e.g., "1. [Activity details...] \\n2. [Next activity...] \\n3. [Following activity...]") across the session keys (s1 to s5). 
 Ensure the sequence applies the 7 Learning Design Principles by explicitly addressing how to:
 1. Make objectives crystal clear to learners at the onset.
 2. Guide/scaffold learners before letting them try tasks on their own.
@@ -381,7 +380,7 @@ Depending on the specific Learning Area (${subject}), choose and design at least
 - Composition
 
 PICTURE GENERATION AND RECOGNITION RULE:
-Whenever a test item or evaluation parameter benefits significantly from visual references, graphics, objects, diagrams, or identification shapes, you MUST embed a precise image instruction using this exact syntax block inside the string: \`\`. Do not write abstract descriptions outside this block.
+Whenever a test item or evaluation parameter benefits significantly from visual references, graphics, objects, diagrams, or identification shapes, you MUST embed a precise image instruction using this exact syntax block inside the string: https://encrypted-tbn3.gstatic.com/licensed-image?q=tbn:ANd9GcRAzujuDF6xuR54DevnvlF-_orMjaC9WyoH66P_3rhq-KzLrjnR86BjhuqNHDeSsceUq1sKYEnpFE6QaBLpxx96YEayC11xF7Y3VoqYAu4vNXRZNl0. Do not write abstract descriptions outside this block.
 
 STRICT FORMATTING RULE FOR ASSESSMENT:
 1. Do not provide abstract paragraph descriptions or bulleted advice. You MUST write out the actual text of the assessment questions/prompts that a teacher can directly copy and use for evaluation.
@@ -397,11 +396,11 @@ Return ONLY a valid JSON object matching this structural schema template exactly
   "objectives": { "s1": "String", "s2": "String", "s3": "String", "s4": "String", "s5": "String" },
   "learnerContext": { "s1": "String", "s2": "String", "s3": "String", "s4": "String", "s5": "String" },
   "preLesson": { "s1": "String", "s2": "String", "s3": "String", "s4": "String", "s5": "String" },
-  "lessonProper": { "s1": "1. ... \n2. ...", "s2": "1. ... \n2. ...", "s3": "1. ... \n2. ...", "s4": "1. ... \n2. ...", "s5": "1. ... \n2. ..." },
+  "lessonProper": { "s1": "1. ... \\n2. ...", "s2": "1. ... \\n2. ...", "s3": "1. ... \\n2. ...", "s4": "1. ... \\n2. ...", "s5": "1. ... \\n2. ..." },
   "resources": { "s1": "String", "s2": "String", "s3": "String", "s4": "String", "s5": "String" },
   "integration": { "s1": "String", "s2": "String", "s3": "String", "s4": "String", "s5": "String" },
   "assessment": { 
-    "s1": "1. Multiple Choice\nPanuto: Tukuyin ang bagay sa larawan.\n\nAlin ito?\nA. papel\nB. libro\nC. lapis\nD. upuan\nSagot: B. libro\n\nSupport Lifeline: ...\nAccommodations: ...", 
+    "s1": "1. Multiple Choice\\nPanuto: Tukuyin ang bagay sa larawan.\\n\\nAlin ito?\\nA. papel\\nB. libro\\nC. lapis\\nD. upuan\\nSagot: B. libro\\n\\nSupport Lifeline: ...\\nAccommodations: ...", 
     "s2": "...", "s3": "...", "s4": "...", "s5": "..." 
   },
   "extendedLearning": { "s1": "String", "s2": "String", "s3": "String", "s4": "String", "s5": "String" },
@@ -423,10 +422,26 @@ Return ONLY a valid JSON object matching this structural schema template exactly
                     })
                 });
 
-                const data = await response.json();
-                if (!response.ok) throw new Error('API Execution Exception');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errMsg = `HTTP Error ${response.status}`;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        if (errorJson.message) errMsg += `: ${errorJson.message}`;
+                    } catch(e) {}
+                    throw new Error(errMsg);
+                }
 
-                const rawJson = JSON.parse(data.choices[0].message.content.trim());
+                const data = await response.json();
+                
+                // FIXED: Strip Markdown fences if the AI forgets to output pure JSON
+                let aiContent = data.choices[0].message.content.trim();
+                if (aiContent.startsWith('```')) {
+                    aiContent = aiContent.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '');
+                }
+
+                const rawJson = JSON.parse(aiContent);
+                
                 window.ilawDataset = {
                     ...rawJson,
                     meta: {
@@ -448,7 +463,8 @@ Return ONLY a valid JSON object matching this structural schema template exactly
                 document.getElementById('exportDocxBtn').classList.remove('hidden');
 
             } catch (error) {
-                alert('Generation Fault: ' + error.message);
+                console.error("API Error Log:", error);
+                alert(`Generation Fault: ${error.message}\n\n(Tip: If it says "Failed to fetch", your browser is blocking the request due to CORS, or your Mistral API key has expired. Please check the browser console for exact details.)`);
             } finally {
                 btn.classList.remove('loading');
                 btn.innerHTML = '<i class="fa fa-magic"></i> Generate ILAW Lesson Plan';
@@ -587,7 +603,6 @@ Return ONLY a valid JSON object matching this structural schema template exactly
 
         document.getElementById('exportPdfBtn').addEventListener('click', function() {
             if (!window.ilawDataset) return;
-            
             if (!hasEnoughCredits()) return;
 
             try {
@@ -669,7 +684,6 @@ Return ONLY a valid JSON object matching this structural schema template exactly
 
         document.getElementById('exportDocxBtn').addEventListener('click', async function() {
             if (!window.ilawDataset) return;
-            
             if (!hasEnoughCredits()) return;
 
             try {
