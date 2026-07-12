@@ -51,15 +51,24 @@
             background: #f1f5f9; padding: 0.35rem 0.75rem;
             border-radius: 9999px; border: 1px solid var(--border);
         }
-        .profile-display img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+        .profile-display img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+        
+        .profile-info { display: flex; flex-direction: column; line-height: 1.2; }
+        
         .profile-display .user-name {
             font-size: 0.9rem; font-weight: 600; color: #1e293b;
             max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        
+        .logout-link {
+            font-size: 0.7rem; color: var(--text-muted); cursor: pointer; text-decoration: underline; margin-top: 2px;
+        }
+        .logout-link:hover { color: #ef4444; }
+
         .profile-display .credits-badge {
             background-color: var(--primary); color: white;
-            font-size: 0.75rem; font-weight: 700; padding: 0.15rem 0.5rem;
-            border-radius: 9999px; white-space: nowrap;
+            font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.6rem;
+            border-radius: 9999px; white-space: nowrap; margin-left: 0.5rem;
         }
 
         /* --- Banner Notification --- */
@@ -176,7 +185,10 @@
 
             <div id="user_profile_wrapper" class="profile-display">
                 <img id="user_avatar" src="" alt="User Avatar">
-                <span id="user_profile_name" class="user-name">Educator</span>
+                <div class="profile-info">
+                    <span id="user_profile_name" class="user-name">Educator</span>
+                    <span class="logout-link" onclick="handleLogout()">Sign Out</span>
+                </div>
                 <span id="user_credits_count" class="credits-badge">0 Credits</span>
             </div>
         </div>
@@ -255,11 +267,63 @@
         let isUserLoggedIn = false;
 
         // --- 2. Identity Processing Handlers ---
-        async function handleCredentialResponse(response) {
-            console.log("Google authentication triggered. Processing response...");
+        
+        // This runs instantly when the page loads to check if the user is already logged in
+        function checkPersistentSession() {
+            const savedSession = localStorage.getItem('deped_active_session');
+            if (savedSession) {
+                try {
+                    const payload = JSON.parse(savedSession);
+                    restoreUserUI(payload);
+                } catch (e) {
+                    console.error("Session corrupted. Clearing...", e);
+                    localStorage.removeItem('deped_active_session');
+                }
+            }
+        }
+
+        // Restores the UI without forcing the user to log in again
+        async function restoreUserUI(payload) {
+            authenticatedUserEmail = payload.email;
+            isUserLoggedIn = true; 
+
+            // Update UI
+            document.getElementById('google_btn_wrapper').style.display = 'none';
+            document.getElementById('auth_banner').style.display = 'none';
+            document.getElementById('user_avatar').src = payload.picture;
+            document.getElementById('user_profile_name').textContent = payload.name;
+            document.getElementById('user_profile_wrapper').style.display = 'flex';
+
+            // Check credits from local cache first for instant UI response
+            let userWalletKey = `credits_pool_${payload.email}`;
+            let cachedBalance = localStorage.getItem(userWalletKey);
             
+            if (cachedBalance !== null) {
+                currentCredits = parseInt(cachedBalance);
+                updateCreditsDisplay();
+            }
+
+            // Silently verify/sync credits with Supabase in the background
+            if(supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient.from('profiles').select('credits').eq('email', payload.email).maybeSingle();
+                    if (data) {
+                        currentCredits = data.credits;
+                        updateCreditsDisplay();
+                    }
+                } catch (err) { 
+                    console.warn("Background sync failed", err); 
+                }
+            }
+        }
+
+        async function handleCredentialResponse(response) {
             try {
                 const payload = parseJwt(response.credential);
+                
+                // Save the session so it persists when returning to the page
+                localStorage.setItem('deped_active_session', JSON.stringify(payload));
+                
                 authenticatedUserEmail = payload.email;
                 isUserLoggedIn = true; 
 
@@ -286,26 +350,28 @@
                 // Background Remote Persistence Sync 
                 if(supabaseClient) {
                     try {
-                        // Swapped to maybeSingle() to prevent error throwing on fresh user accounts
                         const { data, error } = await supabaseClient.from('profiles').select('credits').eq('email', payload.email).maybeSingle();
-                        
                         if (error) throw error;
 
                         if (data) {
                             currentCredits = data.credits;
                             updateCreditsDisplay();
                         } else {
-                            // First time logging in? Insert them into the remote DB.
                             await supabaseClient.from('profiles').insert([{ email: payload.email, name: payload.name, credits: currentCredits }]);
                         }
                     } catch (err) { 
-                        console.warn("Supabase context failed, working out of local storage backup.", err); 
+                        console.warn("Supabase context failed", err); 
                     }
                 }
             } catch (error) {
-                console.error("Critical failure during UI Update / Auth Processing:", error);
-                alert("Login succeeded, but the dashboard failed to update. Please refresh the page.");
+                console.error("Auth Processing:", error);
             }
+        }
+
+        // Destroys the persistent session and reloads the page to normal state
+        function handleLogout() {
+            localStorage.removeItem('deped_active_session');
+            window.location.reload();
         }
 
         // --- 3. Custom Modal View Composers ---
@@ -427,6 +493,9 @@
                 return null;
             }
         }
+
+        // Execute session check immediately when the script executes
+        checkPersistentSession();
     </script>
 </body>
 </html>
