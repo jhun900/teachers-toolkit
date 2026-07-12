@@ -386,14 +386,14 @@
 
     <script>
         // --- 1. Supabase Initialization Setup ---
-        const SUPABASE_URL = 'knfpnuofjxihwutuzbnd';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZnBudW9manhpaHd1dHV6Ym5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzU2MTksImV4cCI6MjA5OTM1MTYxOX0.vqhn-f8ZXZjLgbgvnagRehiL-v0zhTi5G8w863iBHlY';
+        const SUPABASE_URL = 'https://your-project-id.supabase.co';
+        const SUPABASE_KEY = 'your-anon-public-api-key';
         let supabase = null;
         
         try {
             supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         } catch(e) {
-            console.warn("Supabase reference ready. Awaiting production configuration keys configuration.");
+            console.warn("Supabase reference ready. Awaiting production configuration keys.");
         }
 
         let currentCredits = 0;
@@ -406,15 +406,15 @@
             console.log("Validated login payload details:", payload);
             
             authenticatedUserEmail = payload.email;
-            isUserLoggedIn = true;
+            isUserLoggedIn = true; // Flag true immediately on successful response validation
 
-            // Swap out UI components
+            // Swap out UI header elements
             document.getElementById('google_btn_wrapper').style.display = 'none';
             document.getElementById('user_avatar').src = payload.picture;
             document.getElementById('user_profile_name').textContent = payload.name;
             document.getElementById('user_profile_wrapper').style.display = 'flex';
 
-            // Check if user has an account setup or seed 5 initial credits
+            // Sync account data and trigger UI refresh inside
             await synchronizeUserAccount(payload);
         }
 
@@ -424,14 +424,14 @@
             let locallyStoredCredits = localStorage.getItem(userWalletKey);
 
             if (locallyStoredCredits === null) {
-                // First-time login: Allocate 5 welcome bonus credits
+                // First-time login ever: Allocate 5 welcome bonus credits
                 currentCredits = 5;
                 localStorage.setItem(userWalletKey, currentCredits);
             } else {
                 currentCredits = parseInt(locallyStoredCredits);
             }
 
-            // Remote sync to Cloud Database if configured
+            // Sync with remote database if connection is live
             if (supabase) {
                 try {
                     const { data, error } = await supabase
@@ -441,7 +441,7 @@
                         .single();
 
                     if (error && error.code === 'PGRST116') {
-                        // DB Profile doesn't exist -> Register entry with current startup balance
+                        // DB Profile doesn't exist yet -> Create it
                         await supabase.from('profiles').insert([
                             { email: userPayload.email, name: userPayload.name, credits: currentCredits }
                         ]);
@@ -450,10 +450,11 @@
                         localStorage.setItem(userWalletKey, currentCredits);
                     }
                 } catch (err) {
-                    console.error("Supabase communication failure:", err);
+                    console.error("Supabase synchronization skipped or failed:", err);
                 }
             }
 
+            // Apply updates to DOM elements and safely run conditional visibility shifts
             updateCreditsDisplay();
         }
 
@@ -464,7 +465,7 @@
             const lockCardContent = document.getElementById('lock_card_content');
 
             if (!isUserLoggedIn) {
-                // State A: Not logged in at all
+                // State A: Prompt for initial login
                 portalLock.style.display = 'flex';
                 mainContent.classList.add('blur-lock');
                 lockCardContent.innerHTML = `
@@ -472,7 +473,7 @@
                     <p>Please sign in with your Google account using the button at the top right corner to unlock your educator modules and claim your 5 free workspace tokens.</p>
                 `;
             } else if (currentCredits <= 0) {
-                // State B: Authenticated but out of resources
+                // State B: Block if balance runs completely dry post-login
                 portalLock.style.display = 'flex';
                 mainContent.classList.add('blur-lock');
                 lockCardContent.innerHTML = `
@@ -481,7 +482,7 @@
                     <button class="buy-btn" onclick="buyCreditsMock()">Buy 20 Credits for ₱100</button>
                 `;
             } else {
-                // State C: Authenticated and has remaining assets -> Free Workspace Access
+                // State C: Signed in + has balance -> Drop lock screens instantly
                 portalLock.style.display = 'none';
                 mainContent.classList.remove('blur-lock');
             }
@@ -497,21 +498,20 @@
 
         // --- 5. Content Exports & Transaction Logic ---
         async function handleToolExport(targetUrl) {
-            // Guard clause: Immediate denial if out of credits
             if (currentCredits <= 0) {
                 toggleModal(true);
                 return;
             }
 
             try {
-                // Simulate and route the browser path to download/open the requested document
+                // Perform execution action target routing
                 alert(`Export successful! Accessing: ${targetUrl}`);
                 
-                // --- TRANSACTION DEDUCTION IS TRIGGERED ONLY ON SUCCESSFUL REDIRECT HERE ---
+                // --- DEDUCTION HAPPENS HERE IN RESPONSE TO CONFIRMED ACTION SUCCESS ---
                 currentCredits -= 1;
                 updateCreditsDisplay();
 
-                // Sync updated value back up to the database cloud layers
+                // Send network analytics transaction line data to remote table rows
                 if (supabase && authenticatedUserEmail) {
                     await supabase
                         .from('profiles')
@@ -519,17 +519,15 @@
                         .eq('email', authenticatedUserEmail);
                 }
 
-                // Complete action target destination route
                 window.location.href = targetUrl;
 
             } catch (err) {
-                console.error("Export handler encountered an execution challenge: ", err);
-                alert("An error occurred during export processing. No balance was deducted.");
+                console.error("Export process handling fault detected: ", err);
+                alert("An unexpected processing error occurred. Credits preserved.");
             }
         }
 
         function toggleModal(show) {
-            // Displays payment pop-up modal if the layout is already interactive
             document.getElementById('payment_modal').style.display = show ? 'flex' : 'none';
         }
 
@@ -557,7 +555,7 @@
             return JSON.parse(jsonPayload);
         }
 
-        // Initialize state on first mount
+        // Set initial screen appearance layout state flags upon baseline initialization load
         refreshPortalState();
     </script>
 </body>
