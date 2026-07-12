@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DepEd Educator Portal</title>
-    <!-- 1. Load the official Google Identity Services script -->
+    <!-- 1. Load Google Identity Services & Supabase CDN -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --primary: #0d47a1; /* Classic DepEd Blue tint */
@@ -60,15 +61,17 @@
             color: var(--text-muted);
         }
 
-        /* Right Side Identity Dynamic Block */
+        /* Dynamic Right-Aligned Anchor */
         .auth-area {
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             min-height: 40px;
+            min-width: 200px;
         }
 
         .profile-display {
-            display: none;
+            display: none; /* Controlled dynamically via JS */
             align-items: center;
             gap: 0.75rem;
             background: #f1f5f9;
@@ -88,6 +91,10 @@
             font-size: 0.9rem;
             font-weight: 600;
             color: #1e293b;
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .profile-display .credits-badge {
@@ -97,22 +104,24 @@
             font-weight: 700;
             padding: 0.15rem 0.5rem;
             border-radius: 9999px;
+            white-space: nowrap;
         }
 
         /* --- Access Lock Mechanism --- */
         .blur-lock {
-            filter: blur(8px);
+            filter: blur(6px);
             pointer-events: none;
             user-select: none;
         }
 
         .lock-overlay {
             position: fixed;
-            top: 73px; /* Stays below header bar */
+            top: 73px; 
             left: 0;
             width: 100%;
             height: calc(100vh - 73px);
-            background: rgba(248, 250, 252, 0.85);
+            background: rgba(248, 250, 252, 0.6);
+            backdrop-filter: blur(2px);
             z-index: 90;
             display: flex;
             flex-direction: column;
@@ -265,6 +274,7 @@
             header { flex-direction: column; gap: 1rem; text-align: center; }
             .lock-overlay { top: 120px; height: calc(100vh - 120px); }
             main { margin: 1.5rem auto; }
+            .auth-area { justify-content: center; }
         }
     </style>
 </head>
@@ -286,9 +296,9 @@
             <p>DepEd Resource & Analysis Portal</p>
         </div>
         
-        <!-- Top Right Dynamic Block -->
+        <!-- Identity Placement Node -->
         <div class="auth-area">
-            <!-- Container 1: The Google Button (Visible initially) -->
+            <!-- Container 1: The Google Button (Swapped out upon validation) -->
             <div id="google_btn_wrapper">
                 <div class="g_id_signin"
                      data-type="standard"
@@ -300,24 +310,24 @@
                 </div>
             </div>
 
-            <!-- Container 2: User Profile Display (Hidden initially) -->
+            <!-- Container 2: User Profile Display (Occupies the exact same spot post-auth) -->
             <div id="user_profile_wrapper" class="profile-display">
                 <img id="user_avatar" src="" alt="User Avatar">
                 <span id="user_profile_name" class="user-name">Educator</span>
-                <span id="user_credits_count" class="credits-badge">5 Credits</span>
+                <span id="user_credits_count" class="credits-badge">0 Credits</span>
             </div>
         </div>
     </header>
 
-    <!-- Visual Access Lock Overlay -->
+    <!-- Visual Access Lock Overlay (Keeps app visible underneath but interactions locked) -->
     <div id="portal_lock" class="lock-overlay">
         <div class="lock-card">
             <h3>🔒 Portal Access Locked</h3>
-            <p>Please sign in with your Google account using the button at the top right corner to access your educator modules and receive your free workspace credits.</p>
+            <p>Please sign in with your Google account using the button at the top right corner to unlock your educator modules and claim your 5 free workspace tokens.</p>
         </div>
     </div>
 
-    <!-- Main Content Panel (Blurred by default) -->
+    <!-- Main Content Panel (Visible but filtered by default) -->
     <main id="main_content" class="blur-lock">
         <div class="welcome-hero">
             <h2>Applications Dashboard</h2>
@@ -367,55 +377,118 @@
     <div id="payment_modal" class="modal-back-overlay">
         <div class="modal-box">
             <h3>Credits Exhausted!</h3>
-            <p>You have used all your free credits. Please top up your wallet allocation to continue exporting file assets from this engine dashboard.</p>
+            <p>You have used all your remaining credits. Please top up your wallet allocation to continue exporting premium file templates from this dashboard.</p>
             <button class="buy-btn" onclick="buyCreditsMock()">Buy 20 Credits for ₱100</button>
             <br>
             <button class="close-btn" onclick="toggleModal(false)">Close Window</button>
         </div>
     </div>
 
-    <!-- Functional Authentication and Credit Scripts -->
+    <!-- Script Blocks for Identity Processing, Local Wallet Sync, and Supabase hooks -->
     <script>
-        // Initialize credit storage profile configuration
-        let currentCredits = parseInt(localStorage.getItem('user_credits_pool')) || 5;
+        // --- 1. Supabase Initialization Setup ---
+        // Replace these placeholders with your actual project keys from your Supabase Dashboard
+        const SUPABASE_URL = 'knfpnuofjxihwutuzbnd';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZnBudW9manhpaHd1dHV6Ym5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzU2MTksImV4cCI6MjA5OTM1MTYxOX0.vqhn-f8ZXZjLgbgvnagRehiL-v0zhTi5G8w863iBHlY';
+        let supabase = null;
+        
+        try {
+            supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        } catch(e) {
+            console.warn("Supabase reference loaded, waiting for active URL variables configuration setup.");
+        }
 
-        function handleCredentialResponse(response) {
+        let currentCredits = 0;
+        let authenticatedUserEmail = "";
+
+        // --- 2. Google OAuth Token Processing Flow ---
+        async function handleCredentialResponse(response) {
             const payload = parseJwt(response.credential);
-            console.log("Logged in user details successfully decoded:", payload);
-
-            // 1. Swap button visibility for user credentials display
-            document.getElementById('google_btn_wrapper').style.display = 'none';
+            console.log("Validated login payload details payload:", payload);
             
+            authenticatedUserEmail = payload.email;
+
+            // Swap out the Google Button wrapper element and replace with user badge directly
+            document.getElementById('google_btn_wrapper').style.display = 'none';
             document.getElementById('user_avatar').src = payload.picture;
             document.getElementById('user_profile_name').textContent = payload.name;
             document.getElementById('user_profile_wrapper').style.display = 'flex';
 
-            // 2. Refresh dynamic system tokens view metrics
-            updateCreditsDisplay();
+            // Check if user has an account setup already, if not seed 5 login credits
+            await synchronizeUserAccount(payload);
 
-            // 3. Unlock Main Content Area Dashboard UI
+            // Clear visual barriers to content engine modules cleanly
             document.getElementById('portal_lock').style.display = 'none';
             document.getElementById('main_content').classList.remove('blur-lock');
         }
 
-        function updateCreditsDisplay() {
-            document.getElementById('user_credits_count').textContent = `${currentCredits} Credits`;
-            localStorage.setItem('user_credits_pool', currentCredits);
+        // --- 3. Supabase Database Synchronization Handling ---
+        async function synchronizeUserAccount(userPayload) {
+            let userWalletKey = `credits_pool_${userPayload.email}`;
+            let locallyStoredCredits = localStorage.getItem(userWalletKey);
+
+            if (locallyStoredCredits === null) {
+                // Seed 5 startup login Credits for first time access profile
+                currentCredits = 5;
+                localStorage.setItem(userWalletKey, currentCredits);
+            } else {
+                currentCredits = parseInt(locallyStoredCredits);
+            }
+
+            // Sync down to cloud server space if real client instance variable is configured
+            if (supabase) {
+                try {
+                    const { data, error } = await supabase
+                        .from('profiles')
+                        .select('credits')
+                        .eq('email', userPayload.email)
+                        .single();
+
+                    if (error && error.code === 'PGRST116') {
+                        // User database record profile does not exist yet -> Create profile entry
+                        await supabase.from('profiles').insert([
+                            { email: userPayload.email, name: userPayload.name, credits: currentCredits }
+                        ]);
+                    } else if (data) {
+                        // Synchronize application memory block to use remote state balance values
+                        currentCredits = data.credits;
+                        localStorage.setItem(userWalletKey, currentCredits);
+                    }
+                } catch (err) {
+                    console.error("Supabase communication failure:", err);
+                }
+            }
+
+            updateCreditsDisplay();
         }
 
-        function handleToolExport(targetUrl) {
+        function updateCreditsDisplay() {
+            document.getElementById('user_credits_count').textContent = `${currentCredits} Credits`;
+            if (authenticatedUserEmail) {
+                localStorage.setItem(`credits_pool_${authenticatedUserEmail}`, currentCredits);
+            }
+        }
+
+        // --- 4. Content Deductions and Transaction Guards ---
+        async function handleToolExport(targetUrl) {
             if (currentCredits <= 0) {
                 toggleModal(true);
                 return;
             }
 
-            // Deduct credits cleanly
+            // Deduct locally first for zero-latency feedback
             currentCredits -= 1;
             updateCreditsDisplay();
-            
-            alert(`1 Credit Deducted! Remaining tokens: ${currentCredits}. Accessing: ${targetUrl}`);
-            
-            // Redirect window environment structure out safely to your specific linked local file templates
+
+            // Fire and forget updating tracking properties securely inside backend rows asynchronously
+            if (supabase && authenticatedUserEmail) {
+                await supabase
+                    .from('profiles')
+                    .update({ credits: currentCredits })
+                    .eq('email', authenticatedUserEmail);
+            }
+
+            alert(`1 Export Credit Deducted! Remaining tokens balance: ${currentCredits}. Accessing: ${targetUrl}`);
             window.location.href = targetUrl;
         }
 
@@ -423,11 +496,19 @@
             document.getElementById('payment_modal').style.display = show ? 'flex' : 'none';
         }
 
-        function buyCreditsMock() {
+        async function buyCreditsMock() {
             currentCredits += 20;
             updateCreditsDisplay();
             toggleModal(false);
-            alert("Payment Simulated Successfully! 20 export credits loaded onto your portal session.");
+
+            if (supabase && authenticatedUserEmail) {
+                await supabase
+                    .from('profiles')
+                    .update({ credits: currentCredits })
+                    .eq('email', authenticatedUserEmail);
+            }
+
+            alert("Top-up Complete! 20 export tokens loaded into your portal session context successfully.");
         }
 
         function parseJwt(token) {
