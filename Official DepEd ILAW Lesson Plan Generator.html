@@ -51,11 +51,19 @@
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div class="container mx-auto px-4 py-6 max-w-5xl">
-        <header class="bg-white rounded-lg shadow p-5 mb-6 border-l-4 border-deped">
-            <h1 class="text-2xl md:text-3xl font-bold text-depedDark flex items-center gap-3">
-                <i class="fa fa-book"></i> DepEd ILAW Lesson Plan Generator
-            </h1>
-            <p class="text-gray-600 mt-1 text-sm">Official ILAW Matrix Layout | Aligned to DO 3, s. 2026</p>
+        <header class="bg-white rounded-lg shadow p-5 mb-6 border-l-4 border-deped flex justify-between items-center flex-wrap gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-depedDark flex items-center gap-3">
+                    <i class="fa fa-book"></i> DepEd ILAW Lesson Plan Generator
+                </h1>
+                <p class="text-gray-600 mt-1 text-sm">Official ILAW Matrix Layout | Aligned to DO 3, s. 2026</p>
+            </div>
+            
+            <!-- Credit Display UI -->
+            <div class="bg-depedLight px-4 py-2 rounded-lg border border-deped/20 flex items-center gap-2">
+                <i class="fa fa-coins text-deped font-bold"></i>
+                <span class="text-sm font-semibold text-depedDark">Credits: <span id="creditDisplay">3</span></span>
+            </div>
         </header>
 
         <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -171,11 +179,61 @@
                 <span class="text-xs bg-green-100 text-green-800 font-semibold px-2 py-1 rounded">DO 3, s. 2026 Aligned</span>
             </div>
             <div id="lessonPlanContent" class="overflow-x-auto text-xs text-gray-800">
-                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Buy Credits Modal (Hidden by Default) -->
+    <div id="buyCreditsModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex justify-center items-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center transform transition-all">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa fa-exclamation-triangle text-red-500 text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Out of Credits!</h3>
+            <p class="text-gray-600 text-sm mb-6">You have used up all your available credits. Please purchase more credits to continue generating lesson plans.</p>
+            <div class="flex gap-3 justify-center">
+                <button id="closeModalBtn" class="btn-secondary !bg-gray-100 !text-gray-700 hover:!bg-gray-200">Cancel</button>
+                <button id="purchaseBtn" class="btn-primary !bg-green-600 hover:!bg-green-700 flex items-center gap-2">
+                    <i class="fa fa-shopping-cart"></i> Buy Credits
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
+        // Credit System Setup
+        const CREDIT_KEY = 'ilaw_credits_balance';
+        
+        // Retrieve stored credits, or default to 3 if first time loading
+        let userCredits = localStorage.getItem(CREDIT_KEY);
+        if (userCredits === null) {
+            userCredits = 3;
+            localStorage.setItem(CREDIT_KEY, userCredits);
+        } else {
+            userCredits = parseInt(userCredits);
+        }
+
+        // Initialize UI with current credits
+        document.getElementById('creditDisplay').textContent = userCredits;
+
+        // Modal Functionality
+        const modal = document.getElementById('buyCreditsModal');
+        document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
+        
+        // Placeholder for actual purchase logic
+        document.getElementById('purchaseBtn').addEventListener('click', () => {
+            alert('Redirecting to payment gateway...');
+            // In a real app, redirect or open payment popup here
+            // e.g. window.location.href = '/buy-credits';
+            
+            // For testing: simulating a purchase adding 5 credits
+            userCredits += 5;
+            localStorage.setItem(CREDIT_KEY, userCredits);
+            document.getElementById('creditDisplay').textContent = userCredits;
+            modal.classList.add('hidden');
+            alert('Test: Added 5 credits successfully!');
+        });
+
         const subjectsDB = {
             "K": ["Mother Tongue", "Oral Language", "Phonological Awareness", "Beginning Reading", "Mathematics", "Makabansa"],
             "1": ["Mother Tongue", "Filipino", "English", "Mathematics", "Araling Panlipunan", "MAPEH", "Edukasyon sa Pagpapakatao"],
@@ -238,46 +296,13 @@
                 .trim();
         };
 
-        // Export Function Wrapper integrating the new credits check logic
-        async function executeToolExport(exportCallback) {
-            // 1. Check if they are logged in via the persistent session
-            const savedSession = localStorage.getItem('deped_active_session');
-            
-            if (!savedSession) {
-                alert("You are not logged in. Please return to the dashboard to authenticate.");
-                window.location.href = 'index.html';
-                return;
-            }
-
-            const userPayload = JSON.parse(savedSession);
-            const userEmail = userPayload.email;
-            
-            // 2. Check their current credits
-            let currentBalance = parseInt(localStorage.getItem(`credits_pool_${userEmail}`)) || 0;
-
-            if (currentBalance <= 0) {
-                alert("You have zero credits remaining. Please return to the dashboard to recharge.");
-                // Optional: Redirect them to the dashboard automatically
-                // window.location.href = 'index.html'; 
-                return;
-            }
-
-            // 3. IF THEY HAVE CREDITS -> Deduct 1 credit
-            currentBalance -= 1;
-            
-            // 4. Save the new balance back to Local Storage so the Hub sees it
-            localStorage.setItem(`credits_pool_${userEmail}`, currentBalance);
-            
-            // 5. RUN YOUR EXISTING EXPORT LOGIC HERE
-            await exportCallback();
-            
-            alert(`Export successful! You have ${currentBalance} credits remaining.`);
-            
-            // Note: If you want to sync this deduction to Supabase immediately from inside the tool,
-            // you will also need to include the Supabase CDN and initialization in this file.
-        }
-
         document.getElementById('generateBtn').addEventListener('click', async function() {
+            // ----- CREDIT CHECK -----
+            if (userCredits <= 0) {
+                modal.classList.remove('hidden');
+                return; // Stop generation
+            }
+
             const grade = document.getElementById('grade').value;
             const subject = document.getElementById('subject').value;
             const targetLang = document.getElementById('instructionalLang').value;
@@ -287,6 +312,11 @@
                 alert('Please fill out all mandatory fields marked with an asterisk (*). All inputs remain blank by default.');
                 return;
             }
+
+            // Deduct credit before API execution to prevent double submission exploits
+            userCredits -= 1;
+            localStorage.setItem(CREDIT_KEY, userCredits);
+            document.getElementById('creditDisplay').textContent = userCredits;
 
             const btn = this;
             btn.classList.add('loading');
@@ -403,6 +433,12 @@ Return ONLY a valid JSON object matching this structural schema template exactly
 
             } catch (error) {
                 alert('Generation Fault: ' + error.message);
+                
+                // Refund credit if API fails
+                userCredits += 1;
+                localStorage.setItem(CREDIT_KEY, userCredits);
+                document.getElementById('creditDisplay').textContent = userCredits;
+                
             } finally {
                 btn.classList.remove('loading');
                 btn.innerHTML = '<i class="fa fa-magic"></i> Generate ILAW Lesson Plan';
@@ -539,230 +575,226 @@ Return ONLY a valid JSON object matching this structural schema template exactly
             return { stack: contentParts };
         }
 
-        // PDF Matrix Exporter (Explicit Font Size 10) - Now wrapped in executeToolExport
+        // PDF Matrix Exporter (Explicit Font Size 10)
         document.getElementById('exportPdfBtn').addEventListener('click', function() {
-            executeToolExport(() => {
-                if(!window.ilawDataset) return;
-                const d = window.ilawDataset;
+            if(!window.ilawDataset) return;
+            const d = window.ilawDataset;
 
-                const docDefinition = {
-                    pageOrientation: 'landscape',
-                    pageSize: 'A4',
-                    pageMargins: [15, 20, 15, 20],
-                    content: [
-                        { text: 'DEPARTMENT OF EDUCATION OFFICIAL DAILY LESSON LOG (ILAW MATRIX FORMAT)', style: 'headerMain' },
-                        { text: 'Aligned to DepEd DO 3, s. 2026 Core Layouts', style: 'headerSub' },
-                        {
-                            style: 'matrixTable',
-                            table: {
-                                widths: ['18%', '16.4%', '16.4%', '16.4%', '16.4%', '16.4%'],
-                                body: [
-                                    [{ text: 'Name of Lesson', style: 'fieldLabel' }, { text: cleanTxt(d.lessonName), colSpan: 5, style: 'fieldValBold' }, '', '', '', ''],
-                                    [{ text: 'Learning Area', style: 'fieldLabel' }, { text: cleanTxt(d.meta.subject), colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
-                                    [{ text: 'Term / Week', style: 'fieldLabel' }, { text: cleanTxt(d.meta.termWeek), colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
-                                    [{ text: 'Grade & Parameters', style: 'fieldLabel' }, { text: `Grade ${cleanTxt(d.meta.grade)} — (${cleanTxt(d.meta.hours)})`, colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
-                                    [{ text: `No. of Sessions: ${cleanTxt(d.meta.sessions)}`, style: 'headerCell' }, { text: 'Session 1', style: 'headerCell' }, { text: 'Session 2', style: 'headerCell' }, { text: 'Session 3', style: 'headerCell' }, { text: 'Session 4', style: 'headerCell' }, { text: 'Session 5', style: 'headerCell' }],
-                                    [{ text: 'References', style: 'fieldLabel' }, { text: cleanTxt(d.references), colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
-                                    [{ text: 'AI Use Declaration', style: 'fieldLabelColor' }, { text: cleanTxt(d.meta.aiStatement), colSpan: 5, style: 'aiStatementText' }, '', '', '', ''],
-                                    
-                                    [{ text: 'INTENTIONS', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
-                                    [{ text: 'Curriculum Standards', style: 'fieldLabel' }, { text: `LEARNING COMPETENCY:\n${cleanTxt(d.meta.competency)}\n\nCONTENT STANDARD:\n${cleanTxt(d.meta.contentStd)}\n\nPERFORMANCE STANDARD:\n${cleanTxt(d.meta.perfStd)}`, colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
-                                    [{ text: 'Learning Objectives', style: 'fieldLabel' }, { text: cleanTxt(d.objectives.s1) }, { text: cleanTxt(d.objectives.s2) }, { text: cleanTxt(d.objectives.s3) }, { text: cleanTxt(d.objectives.s4) }, { text: cleanTxt(d.objectives.s5) }],
-                                    [{ text: 'Learner Context', style: 'fieldLabel' }, { text: cleanTxt(d.learnerContext.s1) }, { text: cleanTxt(d.learnerContext.s2) }, { text: cleanTxt(d.learnerContext.s3) }, { text: cleanTxt(d.learnerContext.s4) }, { text: cleanTxt(d.learnerContext.s5) }],
-                                    
-                                    [{ text: 'LEARNING EXPERIENCE FLOW', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
-                                    [{ text: 'Pre-Lesson (Priming)', style: 'fieldLabel' }, { text: cleanTxt(d.preLesson.s1) }, { text: cleanTxt(d.preLesson.s2) }, { text: cleanTxt(d.preLesson.s3) }, { text: cleanTxt(d.preLesson.s4) }, { text: cleanTxt(d.preLesson.s5) }],
-                                    [{ text: 'Lesson Proper (Numbered Flow)', style: 'fieldLabelProper' }, { text: cleanTxt(d.lessonProper.s1) }, { text: cleanTxt(d.lessonProper.s2) }, { text: cleanTxt(d.lessonProper.s3) }, { text: cleanTxt(d.lessonProper.s4) }, { text: cleanTxt(d.lessonProper.s5) }],
-                                    [{ text: 'Learning Resources', style: 'fieldLabel' }, { text: cleanTxt(d.resources.s1) }, { text: cleanTxt(d.resources.s2) }, { text: cleanTxt(d.resources.s3) }, { text: cleanTxt(d.resources.s4) }, { text: cleanTxt(d.resources.s5) }],
-                                    [{ text: 'Opportunities for Integration', style: 'fieldLabel' }, { text: cleanTxt(d.integration.s1) }, { text: cleanTxt(d.integration.s2) }, { text: cleanTxt(d.integration.s3) }, { text: cleanTxt(d.integration.s4) }, { text: cleanTxt(d.integration.s5) }],
-                                    
-                                    [{ text: 'ASSESSMENT & WAYS FORWARD', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
-                                    [
-                                        { text: 'Formative Assessments', style: 'fieldLabelAssessment' }, 
-                                        parseVisualBlocksPdfMake(d.assessment.s1), 
-                                        parseVisualBlocksPdfMake(d.assessment.s2), 
-                                        parseVisualBlocksPdfMake(d.assessment.s3), 
-                                        parseVisualBlocksPdfMake(d.assessment.s4), 
-                                        parseVisualBlocksPdfMake(d.assessment.s5)
-                                    ],
-                                    [{ text: 'Extended Learning Tasks', style: 'fieldLabel' }, { text: cleanTxt(d.extendedLearning.s1) }, { text: cleanTxt(d.extendedLearning.s2) }, { text: cleanTxt(d.extendedLearning.s3) }, { text: cleanTxt(d.extendedLearning.s4) }, { text: cleanTxt(d.extendedLearning.s5) }],
-                                    
-                                    [{ text: 'REFLECTIONS & INSIGHTS', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
-                                    [{ text: 'Teacher Reflection Metrics', style: 'fieldLabel' }, { text: cleanTxt(d.reflections.s1) }, { text: cleanTxt(d.reflections.s2) }, { text: cleanTxt(d.reflections.s3) }, { text: cleanTxt(d.reflections.s4) }, { text: cleanTxt(d.reflections.s5) }]
-                                ]
-                            }
+            const docDefinition = {
+                pageOrientation: 'landscape',
+                pageSize: 'A4',
+                pageMargins: [15, 20, 15, 20],
+                content: [
+                    { text: 'DEPARTMENT OF EDUCATION OFFICIAL DAILY LESSON LOG (ILAW MATRIX FORMAT)', style: 'headerMain' },
+                    { text: 'Aligned to DepEd DO 3, s. 2026 Core Layouts', style: 'headerSub' },
+                    {
+                        style: 'matrixTable',
+                        table: {
+                            widths: ['18%', '16.4%', '16.4%', '16.4%', '16.4%', '16.4%'],
+                            body: [
+                                [{ text: 'Name of Lesson', style: 'fieldLabel' }, { text: cleanTxt(d.lessonName), colSpan: 5, style: 'fieldValBold' }, '', '', '', ''],
+                                [{ text: 'Learning Area', style: 'fieldLabel' }, { text: cleanTxt(d.meta.subject), colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
+                                [{ text: 'Term / Week', style: 'fieldLabel' }, { text: cleanTxt(d.meta.termWeek), colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
+                                [{ text: 'Grade & Parameters', style: 'fieldLabel' }, { text: `Grade ${cleanTxt(d.meta.grade)} — (${cleanTxt(d.meta.hours)})`, colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
+                                [{ text: `No. of Sessions: ${cleanTxt(d.meta.sessions)}`, style: 'headerCell' }, { text: 'Session 1', style: 'headerCell' }, { text: 'Session 2', style: 'headerCell' }, { text: 'Session 3', style: 'headerCell' }, { text: 'Session 4', style: 'headerCell' }, { text: 'Session 5', style: 'headerCell' }],
+                                [{ text: 'References', style: 'fieldLabel' }, { text: cleanTxt(d.references), colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
+                                [{ text: 'AI Use Declaration', style: 'fieldLabelColor' }, { text: cleanTxt(d.meta.aiStatement), colSpan: 5, style: 'aiStatementText' }, '', '', '', ''],
+                                
+                                [{ text: 'INTENTIONS', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
+                                [{ text: 'Curriculum Standards', style: 'fieldLabel' }, { text: `LEARNING COMPETENCY:\n${cleanTxt(d.meta.competency)}\n\nCONTENT STANDARD:\n${cleanTxt(d.meta.contentStd)}\n\nPERFORMANCE STANDARD:\n${cleanTxt(d.meta.perfStd)}`, colSpan: 5, style: 'fieldVal' }, '', '', '', ''],
+                                [{ text: 'Learning Objectives', style: 'fieldLabel' }, { text: cleanTxt(d.objectives.s1) }, { text: cleanTxt(d.objectives.s2) }, { text: cleanTxt(d.objectives.s3) }, { text: cleanTxt(d.objectives.s4) }, { text: cleanTxt(d.objectives.s5) }],
+                                [{ text: 'Learner Context', style: 'fieldLabel' }, { text: cleanTxt(d.learnerContext.s1) }, { text: cleanTxt(d.learnerContext.s2) }, { text: cleanTxt(d.learnerContext.s3) }, { text: cleanTxt(d.learnerContext.s4) }, { text: cleanTxt(d.learnerContext.s5) }],
+                                
+                                [{ text: 'LEARNING EXPERIENCE FLOW', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
+                                [{ text: 'Pre-Lesson (Priming)', style: 'fieldLabel' }, { text: cleanTxt(d.preLesson.s1) }, { text: cleanTxt(d.preLesson.s2) }, { text: cleanTxt(d.preLesson.s3) }, { text: cleanTxt(d.preLesson.s4) }, { text: cleanTxt(d.preLesson.s5) }],
+                                [{ text: 'Lesson Proper (Numbered Flow)', style: 'fieldLabelProper' }, { text: cleanTxt(d.lessonProper.s1) }, { text: cleanTxt(d.lessonProper.s2) }, { text: cleanTxt(d.lessonProper.s3) }, { text: cleanTxt(d.lessonProper.s4) }, { text: cleanTxt(d.lessonProper.s5) }],
+                                [{ text: 'Learning Resources', style: 'fieldLabel' }, { text: cleanTxt(d.resources.s1) }, { text: cleanTxt(d.resources.s2) }, { text: cleanTxt(d.resources.s3) }, { text: cleanTxt(d.resources.s4) }, { text: cleanTxt(d.resources.s5) }],
+                                [{ text: 'Opportunities for Integration', style: 'fieldLabel' }, { text: cleanTxt(d.integration.s1) }, { text: cleanTxt(d.integration.s2) }, { text: cleanTxt(d.integration.s3) }, { text: cleanTxt(d.integration.s4) }, { text: cleanTxt(d.integration.s5) }],
+                                
+                                [{ text: 'ASSESSMENT & WAYS FORWARD', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
+                                [
+                                    { text: 'Formative Assessments', style: 'fieldLabelAssessment' }, 
+                                    parseVisualBlocksPdfMake(d.assessment.s1), 
+                                    parseVisualBlocksPdfMake(d.assessment.s2), 
+                                    parseVisualBlocksPdfMake(d.assessment.s3), 
+                                    parseVisualBlocksPdfMake(d.assessment.s4), 
+                                    parseVisualBlocksPdfMake(d.assessment.s5)
+                                ],
+                                [{ text: 'Extended Learning Tasks', style: 'fieldLabel' }, { text: cleanTxt(d.extendedLearning.s1) }, { text: cleanTxt(d.extendedLearning.s2) }, { text: cleanTxt(d.extendedLearning.s3) }, { text: cleanTxt(d.extendedLearning.s4) }, { text: cleanTxt(d.extendedLearning.s5) }],
+                                
+                                [{ text: 'REFLECTIONS & INSIGHTS', colSpan: 6, style: 'sectionDivider' }, '', '', '', '', ''],
+                                [{ text: 'Teacher Reflection Metrics', style: 'fieldLabel' }, { text: cleanTxt(d.reflections.s1) }, { text: cleanTxt(d.reflections.s2) }, { text: cleanTxt(d.reflections.s3) }, { text: cleanTxt(d.reflections.s4) }, { text: cleanTxt(d.reflections.s5) }]
+                            ]
                         }
-                    ],
-                    styles: {
-                        headerMain: { fontSize: 12, bold: true, alignment: 'center', textColor: '#00335C' },
-                        headerSub: { fontSize: 10, alignment: 'center', margin: [0, 2, 0, 10], textColor: '#555555' },
-                        matrixTable: { fontSize: 10 },
-                        fieldLabel: { bold: true, fillColor: '#f9fafb', fontSize: 10 },
-                        fieldLabelProper: { bold: true, fillColor: '#E6F0F8', textColor: '#00335C', fontSize: 10 },
-                        fieldLabelAssessment: { bold: true, fillColor: '#ffedd5', textColor: '#431407', fontSize: 10 },
-                        fieldLabelColor: { bold: true, fillColor: '#f9fafb', textColor: '#991b1b', fontSize: 10 },
-                        fieldValBold: { bold: true, textColor: '#004B87', fontSize: 10 },
-                        fieldVal: { textColor: '#111111', fontSize: 10 },
-                        aiStatementText: { italic: true, textColor: '#4b5563', fontSize: 9 },
-                        headerCell: { bold: true, fillColor: '#004B87', textColor: '#ffffff', alignment: 'center', fontSize: 10 },
-                        sectionDivider: { bold: true, fillColor: '#E6F0F8', textColor: '#00335C', alignment: 'center', fontSize: 11 }
-                    },
-                    defaultStyle: { fontSize: 10, lineHeight: 1.25 }
-                };
+                    }
+                ],
+                styles: {
+                    headerMain: { fontSize: 12, bold: true, alignment: 'center', textColor: '#00335C' },
+                    headerSub: { fontSize: 10, alignment: 'center', margin: [0, 2, 0, 10], textColor: '#555555' },
+                    matrixTable: { fontSize: 10 },
+                    fieldLabel: { bold: true, fillColor: '#f9fafb', fontSize: 10 },
+                    fieldLabelProper: { bold: true, fillColor: '#E6F0F8', textColor: '#00335C', fontSize: 10 },
+                    fieldLabelAssessment: { bold: true, fillColor: '#ffedd5', textColor: '#431407', fontSize: 10 },
+                    fieldLabelColor: { bold: true, fillColor: '#f9fafb', textColor: '#991b1b', fontSize: 10 },
+                    fieldValBold: { bold: true, textColor: '#004B87', fontSize: 10 },
+                    fieldVal: { textColor: '#111111', fontSize: 10 },
+                    aiStatementText: { italic: true, textColor: '#4b5563', fontSize: 9 },
+                    headerCell: { bold: true, fillColor: '#004B87', textColor: '#ffffff', alignment: 'center', fontSize: 10 },
+                    sectionDivider: { bold: true, fillColor: '#E6F0F8', textColor: '#00335C', alignment: 'center', fontSize: 11 }
+                },
+                defaultStyle: { fontSize: 10, lineHeight: 1.25 }
+            };
 
-                pdfMake.createPdf(docDefinition).download(`DepEd_ILAW_Matrix_Grade${d.meta.grade}.pdf`);
-            });
+            pdfMake.createPdf(docDefinition).download(`DepEd_ILAW_Matrix_Grade${d.meta.grade}.pdf`);
         });
 
-        // DOCX Matrix Exporter (Fixed Standards Arrangement & Font Size 10) - Now wrapped in executeToolExport
-        document.getElementById('exportDocxBtn').addEventListener('click', function() {
-            executeToolExport(async () => {
-                if(!window.ilawDataset) return;
-                const d = window.ilawDataset;
-                const { Document, Table, TableRow, TableCell, Paragraph, TextRun, AlignmentType, WidthType, BorderStyle, PageOrientation } = docx;
+        // DOCX Matrix Exporter (Fixed Standards Arrangement & Font Size 10)
+        document.getElementById('exportDocxBtn').addEventListener('click', async function() {
+            if(!window.ilawDataset) return;
+            const d = window.ilawDataset;
+            const { Document, Table, TableRow, TableCell, Paragraph, TextRun, AlignmentType, WidthType, BorderStyle, PageOrientation } = docx;
 
-                const borderCfg = { style: BorderStyle.SINGLE, size: 4, color: "666666" };
-                const defCellBorders = { top: borderCfg, bottom: borderCfg, left: borderCfg, right: borderCfg };
+            const borderCfg = { style: BorderStyle.SINGLE, size: 4, color: "666666" };
+            const defCellBorders = { top: borderCfg, bottom: borderCfg, left: borderCfg, right: borderCfg };
 
-                const labelCell = (txt, bgHex = "F9FAFB") => new TableCell({
-                    shading: { fill: bgHex }, borders: defCellBorders,
-                    children: [new Paragraph({ children: [new TextRun({ text: cleanTxt(txt), bold: true, size: 20 })] })]
+            const labelCell = (txt, bgHex = "F9FAFB") => new TableCell({
+                shading: { fill: bgHex }, borders: defCellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: cleanTxt(txt), bold: true, size: 20 })] })]
+            });
+            
+            const headerCell = (txt) => new TableCell({
+                shading: { fill: "004B87" }, borders: defCellBorders,
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: cleanTxt(txt), bold: true, color: "FFFFFF", size: 20 })] })]
+            });
+            
+            const dividerCell = (txt) => new TableCell({
+                columnSpan: 6, shading: { fill: "E6F0F8" }, borders: defCellBorders,
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: cleanTxt(txt), bold: true, color: "00335C", size: 22 })] })]
+            });
+
+            const createStandardsCell = () => {
+                return new TableCell({
+                    columnSpan: 5,
+                    borders: defCellBorders,
+                    children: [
+                        new Paragraph({ children: [new TextRun({ text: "LEARNING COMPETENCY:", bold: true, size: 20, color: "00335C" })] }),
+                        new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: d.meta.competency, size: 20 })] }),
+                        new Paragraph({ children: [new TextRun({ text: "CONTENT STANDARD:", bold: true, size: 20, color: "00335C" })] }),
+                        new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: d.meta.contentStd, size: 20 })] }),
+                        new Paragraph({ children: [new TextRun({ text: "PERFORMANCE STANDARD:", bold: true, size: 20, color: "00335C" })] }),
+                        new Paragraph({ children: [new TextRun({ text: d.meta.perfStd, size: 20 })] })
+                    ]
                 });
-                
-                const headerCell = (txt) => new TableCell({
-                    shading: { fill: "004B87" }, borders: defCellBorders,
-                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: cleanTxt(txt), bold: true, color: "FFFFFF", size: 20 })] })]
-                });
-                
-                const dividerCell = (txt) => new TableCell({
-                    columnSpan: 6, shading: { fill: "E6F0F8" }, borders: defCellBorders,
-                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: cleanTxt(txt), bold: true, color: "00335C", size: 22 })] })]
-                });
+            };
 
-                const createStandardsCell = () => {
-                    return new TableCell({
-                        columnSpan: 5,
-                        borders: defCellBorders,
-                        children: [
-                            new Paragraph({ children: [new TextRun({ text: "LEARNING COMPETENCY:", bold: true, size: 20, color: "00335C" })] }),
-                            new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: d.meta.competency, size: 20 })] }),
-                            new Paragraph({ children: [new TextRun({ text: "CONTENT STANDARD:", bold: true, size: 20, color: "00335C" })] }),
-                            new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: d.meta.contentStd, size: 20 })] }),
-                            new Paragraph({ children: [new TextRun({ text: "PERFORMANCE STANDARD:", bold: true, size: 20, color: "00335C" })] }),
-                            new Paragraph({ children: [new TextRun({ text: d.meta.perfStd, size: 20 })] })
-                        ]
-                    });
-                };
+            const cellText = (txt, bgHex = "FFFFFF") => new TableCell({
+                shading: { fill: bgHex }, borders: defCellBorders,
+                children: cleanTxt(txt).split('\n').map(line => new Paragraph({ children: [new TextRun({ text: line, size: 20 })] }))
+            });
 
-                const cellText = (txt, bgHex = "FFFFFF") => new TableCell({
-                    shading: { fill: bgHex }, borders: defCellBorders,
-                    children: cleanTxt(txt).split('\n').map(line => new Paragraph({ children: [new TextRun({ text: line, size: 20 })] }))
-                });
+            const cellTextWithImagesDocx = (txt, bgHex = "FFFFFF") => {
+                const rawStr = cleanTxt(txt);
+                const regex = /\[INSERT IMAGE:\s*([^\]]+)\]/g;
+                const childrenElements = [];
+                let lastIndex = 0;
+                let match;
 
-                const cellTextWithImagesDocx = (txt, bgHex = "FFFFFF") => {
-                    const rawStr = cleanTxt(txt);
-                    const regex = /\[INSERT IMAGE:\s*([^\]]+)\]/g;
-                    const childrenElements = [];
-                    let lastIndex = 0;
-                    let match;
-
-                    while ((match = regex.exec(rawStr)) !== null) {
-                        const textBefore = rawStr.substring(lastIndex, match.index);
-                        if (textBefore) {
-                            textBefore.split('\n').forEach(line => {
-                                childrenElements.push(new Paragraph({ children: [new TextRun({ text: line, size: 20 })] }));
-                            });
-                        }
-
-                        const imgDesc = match[1];
-                        childrenElements.push(
-                            new Paragraph({
-                                spacing: { before: 100, after: 40 },
-                                children: [new TextRun({ text: "📷 [ VISUAL RECOGNITION FRAME ]", bold: true, size: 16, color: "004B87" })]
-                            })
-                        );
-                        childrenElements.push(
-                            new Paragraph({
-                                spacing: { after: 100 },
-                                children: [new TextRun({ text: imgDesc, italic: true, size: 16, color: "555555" })]
-                            })
-                        );
-
-                        lastIndex = regex.lastIndex;
-                    }
-
-                    const textAfter = rawStr.substring(lastIndex);
-                    if (textAfter) {
-                        textAfter.split('\n').forEach(line => {
+                while ((match = regex.exec(rawStr)) !== null) {
+                    const textBefore = rawStr.substring(lastIndex, match.index);
+                    if (textBefore) {
+                        textBefore.split('\n').forEach(line => {
                             childrenElements.push(new Paragraph({ children: [new TextRun({ text: line, size: 20 })] }));
                         });
                     }
 
-                    if (childrenElements.length === 0) {
-                        childrenElements.push(new Paragraph({ children: [new TextRun({ text: rawStr, size: 20 })] }));
-                    }
+                    const imgDesc = match[1];
+                    childrenElements.push(
+                        new Paragraph({
+                            spacing: { before: 100, after: 40 },
+                            children: [new TextRun({ text: "📷 [ VISUAL RECOGNITION FRAME ]", bold: true, size: 16, color: "004B87" })]
+                        })
+                    );
+                    childrenElements.push(
+                        new Paragraph({
+                            spacing: { after: 100 },
+                            children: [new TextRun({ text: imgDesc, italic: true, size: 16, color: "555555" })]
+                        })
+                    );
 
-                    return new TableCell({
-                        shading: { fill: bgHex },
-                        borders: defCellBorders,
-                        children: childrenElements
+                    lastIndex = regex.lastIndex;
+                }
+
+                const textAfter = rawStr.substring(lastIndex);
+                if (textAfter) {
+                    textAfter.split('\n').forEach(line => {
+                        childrenElements.push(new Paragraph({ children: [new TextRun({ text: line, size: 20 })] }));
                     });
-                };
+                }
 
-                const cellTextSpan = (txt, span, isBold = false) => new TableCell({
-                    columnSpan: span, borders: defCellBorders,
-                    children: [new Paragraph({ children: [new TextRun({ text: cleanTxt(txt), size: 20, bold: isBold })] })]
+                if (childrenElements.length === 0) {
+                    childrenElements.push(new Paragraph({ children: [new TextRun({ text: rawStr, size: 20 })] }));
+                }
+
+                return new TableCell({
+                    shading: { fill: bgHex },
+                    borders: defCellBorders,
+                    children: childrenElements
                 });
+            };
 
-                const doc = new Document({
-                    sections: [{
-                        properties: {
-                            page: {
-                                size: { width: docx.convertInchesToTwip(11.69), height: docx.convertInchesToTwip(8.27) },
-                                orientation: PageOrientation.LANDSCAPE,
-                                margin: { top: 600, bottom: 600, left: 600, right: 600 }
-                            }
-                        },
-                        children: [
-                            new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "DEPARTMENT OF EDUCATION DAILY LESSON LOG (ILAW FORMAT)", bold: true, size: 24, color: "00335C" })] }),
-                            new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: "Aligned to DepEd DO 3, s. 2026 Layout Protocols", italic: true, size: 18 })] }),
-                            new Table({
-                                width: { size: 100, type: WidthType.PERCENTAGE },
-                                rows: [
-                                    new TableRow({ children: [labelCell("Name of Lesson"), cellTextSpan(d.lessonName, 5, true)] }),
-                                    new TableRow({ children: [labelCell("Learning Area"), cellTextSpan(d.meta.subject, 5)] }),
-                                    new TableRow({ children: [labelCell("Term / Week"), cellTextSpan(d.meta.termWeek, 5)] }),
-                                    new TableRow({ children: [labelCell("Grade & Parameters"), cellTextSpan(`Grade ${d.meta.grade} — (${d.meta.hours})`, 5)] }),
-                                    new TableRow({ children: [headerCell(`Sessions: ${d.meta.sessions}`), headerCell("Session 1"), headerCell("Session 2"), headerCell("Session 3"), headerCell("Session 4"), headerCell("Session 5")] }),
-                                    new TableRow({ children: [labelCell("References"), cellTextSpan(d.references, 5)] }),
-                                    new TableRow({ children: [labelCell("AI Use Declaration"), new TableCell({ columnSpan: 5, borders: defCellBorders, children: [new Paragraph({ children: [new TextRun({ text: d.meta.aiStatement, italic: true, size: 18, color: "555555" })] })] })] }),
-                                    
-                                    new TableRow({ children: [dividerCell("INTENTIONS")] }),
-                                    new TableRow({ children: [labelCell("Curriculum Standards"), createStandardsCell()] }),
-                                    new TableRow({ children: [labelCell("Learning Objectives"), cellText(d.objectives.s1), cellText(d.objectives.s2), cellText(d.objectives.s3), cellText(d.objectives.s4), cellText(d.objectives.s5)] }),
-                                    new TableRow({ children: [labelCell("Learner Context"), cellText(d.learnerContext.s1), cellText(d.learnerContext.s2), cellText(d.learnerContext.s3), cellText(d.learnerContext.s4), cellText(d.learnerContext.s5)] }),
-                                    
-                                    new TableRow({ children: [dividerCell("LEARNING EXPERIENCE FLOW")] }),
-                                    new TableRow({ children: [labelCell("Pre-Lesson Framework"), cellText(d.preLesson.s1), cellText(d.preLesson.s2), cellText(d.preLesson.s3), cellText(d.preLesson.s4), cellText(d.preLesson.s5)] }),
-                                    new TableRow({ children: [labelCell("Lesson Proper (Numbered Flow)", "E6F0F8"), cellText(d.lessonProper.s1, "F4F8FA"), cellText(d.lessonProper.s2, "F4F8FA"), cellText(d.lessonProper.s3, "F4F8FA"), cellText(d.lessonProper.s4, "F4F8FA"), cellText(d.lessonProper.s5, "F4F8FA")] }),
-                                    new TableRow({ children: [labelCell("Learning Resources"), cellText(d.resources.s1), cellText(d.resources.s2), cellText(d.resources.s3), cellText(d.resources.s4), cellText(d.resources.s5)] }),
-                                    new TableRow({ children: [labelCell("Integration Scope"), cellText(d.integration.s1), cellText(d.integration.s2), cellText(d.integration.s3), cellText(d.integration.s4), cellText(d.integration.s5)] }),
-                                    
-                                    new TableRow({ children: [dividerCell("ASSESSMENTS & EVALUATIONS")] }),
-                                    new TableRow({ children: [labelCell("Formative Tasks", "FFEDD5"), cellTextWithImagesDocx(d.assessment.s1, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s2, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s3, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s4, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s5, "FFFBF7")] }),
-                                    new TableRow({ children: [labelCell("Extended Learning"), cellText(d.extendedLearning.s1), cellText(d.extendedLearning.s2), cellText(d.extendedLearning.s3), cellText(d.extendedLearning.s4), cellText(d.extendedLearning.s5)] }),
-                                    
-                                    new TableRow({ children: [dividerCell("REFLECTIONS & INSIGHTS")] }),
-                                    new TableRow({ children: [labelCell("Teacher Self-Reflection"), cellText(d.reflections.s1), cellText(d.reflections.s2), cellText(d.reflections.s3), cellText(d.reflections.s4), cellText(d.reflections.s5)] })
-                                ]
-                            })
-                        ]
-                    }]
-                });
-
-                const blob = await docx.Packer.toBlob(doc);
-                saveAs(blob, `DepEd_ILAW_Matrix_Grade${d.meta.grade}.docx`);
+            const cellTextSpan = (txt, span, isBold = false) => new TableCell({
+                columnSpan: span, borders: defCellBorders,
+                children: [new Paragraph({ children: [new TextRun({ text: cleanTxt(txt), size: 20, bold: isBold })] })]
             });
+
+            const doc = new Document({
+                sections: [{
+                    properties: {
+                        page: {
+                            size: { width: docx.convertInchesToTwip(11.69), height: docx.convertInchesToTwip(8.27) },
+                            orientation: PageOrientation.LANDSCAPE,
+                            margin: { top: 600, bottom: 600, left: 600, right: 600 }
+                        }
+                    },
+                    children: [
+                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "DEPARTMENT OF EDUCATION DAILY LESSON LOG (ILAW FORMAT)", bold: true, size: 24, color: "00335C" })] }),
+                        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: "Aligned to DepEd DO 3, s. 2026 Layout Protocols", italic: true, size: 18 })] }),
+                        new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            rows: [
+                                new TableRow({ children: [labelCell("Name of Lesson"), cellTextSpan(d.lessonName, 5, true)] }),
+                                new TableRow({ children: [labelCell("Learning Area"), cellTextSpan(d.meta.subject, 5)] }),
+                                new TableRow({ children: [labelCell("Term / Week"), cellTextSpan(d.meta.termWeek, 5)] }),
+                                new TableRow({ children: [labelCell("Grade & Parameters"), cellTextSpan(`Grade ${d.meta.grade} — (${d.meta.hours})`, 5)] }),
+                                new TableRow({ children: [headerCell(`Sessions: ${d.meta.sessions}`), headerCell("Session 1"), headerCell("Session 2"), headerCell("Session 3"), headerCell("Session 4"), headerCell("Session 5")] }),
+                                new TableRow({ children: [labelCell("References"), cellTextSpan(d.references, 5)] }),
+                                new TableRow({ children: [labelCell("AI Use Declaration"), new TableCell({ columnSpan: 5, borders: defCellBorders, children: [new Paragraph({ children: [new TextRun({ text: d.meta.aiStatement, italic: true, size: 18, color: "555555" })] })] })] }),
+                                
+                                new TableRow({ children: [dividerCell("INTENTIONS")] }),
+                                new TableRow({ children: [labelCell("Curriculum Standards"), createStandardsCell()] }),
+                                new TableRow({ children: [labelCell("Learning Objectives"), cellText(d.objectives.s1), cellText(d.objectives.s2), cellText(d.objectives.s3), cellText(d.objectives.s4), cellText(d.objectives.s5)] }),
+                                new TableRow({ children: [labelCell("Learner Context"), cellText(d.learnerContext.s1), cellText(d.learnerContext.s2), cellText(d.learnerContext.s3), cellText(d.learnerContext.s4), cellText(d.learnerContext.s5)] }),
+                                
+                                new TableRow({ children: [dividerCell("LEARNING EXPERIENCE FLOW")] }),
+                                new TableRow({ children: [labelCell("Pre-Lesson Framework"), cellText(d.preLesson.s1), cellText(d.preLesson.s2), cellText(d.preLesson.s3), cellText(d.preLesson.s4), cellText(d.preLesson.s5)] }),
+                                new TableRow({ children: [labelCell("Lesson Proper (Numbered Flow)", "E6F0F8"), cellText(d.lessonProper.s1, "F4F8FA"), cellText(d.lessonProper.s2, "F4F8FA"), cellText(d.lessonProper.s3, "F4F8FA"), cellText(d.lessonProper.s4, "F4F8FA"), cellText(d.lessonProper.s5, "F4F8FA")] }),
+                                new TableRow({ children: [labelCell("Learning Resources"), cellText(d.resources.s1), cellText(d.resources.s2), cellText(d.resources.s3), cellText(d.resources.s4), cellText(d.resources.s5)] }),
+                                new TableRow({ children: [labelCell("Integration Scope"), cellText(d.integration.s1), cellText(d.integration.s2), cellText(d.integration.s3), cellText(d.integration.s4), cellText(d.integration.s5)] }),
+                                
+                                new TableRow({ children: [dividerCell("ASSESSMENTS & EVALUATIONS")] }),
+                                new TableRow({ children: [labelCell("Formative Tasks", "FFEDD5"), cellTextWithImagesDocx(d.assessment.s1, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s2, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s3, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s4, "FFFBF7"), cellTextWithImagesDocx(d.assessment.s5, "FFFBF7")] }),
+                                new TableRow({ children: [labelCell("Extended Learning"), cellText(d.extendedLearning.s1), cellText(d.extendedLearning.s2), cellText(d.extendedLearning.s3), cellText(d.extendedLearning.s4), cellText(d.extendedLearning.s5)] }),
+                                
+                                new TableRow({ children: [dividerCell("REFLECTIONS & INSIGHTS")] }),
+                                new TableRow({ children: [labelCell("Teacher Self-Reflection"), cellText(d.reflections.s1), cellText(d.reflections.s2), cellText(d.reflections.s3), cellText(d.reflections.s4), cellText(d.reflections.s5)] })
+                            ]
+                        })
+                    ]
+                }]
+            });
+
+            const blob = await docx.Packer.toBlob(doc);
+            saveAs(blob, `DepEd_ILAW_Matrix_Grade${d.meta.grade}.docx`);
         });
     </script>
 </body>
