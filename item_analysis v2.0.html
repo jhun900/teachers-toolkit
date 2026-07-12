@@ -884,7 +884,34 @@
         lmUL.innerHTML = least.length === 0 ? "<li>No critical failure lines noted.</li>" : least.map(i => `<li><strong>Item ${i.item}:</strong> ${i.skill} (${i.pct.toFixed(0)}% Pass Rate)</li>`).join('');
     }
 
-    function exportConsolidatedReport() {
+    async function exportConsolidatedReport() {
+        // 1. Check if they are logged in via the persistent session
+        const savedSession = localStorage.getItem('deped_active_session');
+        
+        if (!savedSession) {
+            alert("You are not logged in. Please return to the dashboard to authenticate.");
+            window.location.href = 'index.html';
+            return;
+        }
+
+        const userPayload = JSON.parse(savedSession);
+        const userEmail = userPayload.email;
+        
+        // 2. Check their current credits
+        let currentBalance = parseInt(localStorage.getItem(`credits_pool_${userEmail}`)) || 0;
+
+        if (currentBalance <= 0) {
+            alert("You have zero credits remaining. Please return to the dashboard to recharge.");
+            return;
+        }
+
+        // 3. IF THEY HAVE CREDITS -> Deduct 1 credit
+        currentBalance -= 1;
+        
+        // 4. Save the new balance back to Local Storage so the Hub sees it
+        localStorage.setItem(`credits_pool_${userEmail}`, currentBalance);
+        
+        // 5. RUN EXISTING EXPORT LOGIC HERE
         const sectionName = document.getElementById('sectionName').value;
         const learningAreaStr = document.getElementById('learningArea').value;
         const totalEnrollment = document.getElementById('lblEnrollment').innerText;
@@ -1044,6 +1071,8 @@
         document.body.appendChild(downloadLink);
         downloadLink.click();
         document.body.removeChild(downloadLink);
+        
+        alert(`Export successful! You have ${currentBalance} credits remaining.`);
     }
 
     window.onload = function() {
