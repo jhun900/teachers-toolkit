@@ -9,6 +9,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
     <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <!-- Add Supabase Client for Real-time/Database checks -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script>
         tailwind.config = {
@@ -62,7 +64,7 @@
             <!-- Credit Display UI -->
             <div class="bg-depedLight px-4 py-2 rounded-lg border border-deped/20 flex items-center gap-2">
                 <i class="fa fa-coins text-deped font-bold"></i>
-                <span class="text-sm font-semibold text-depedDark">Credits: <span id="creditDisplay">3</span></span>
+                <span class="text-sm font-semibold text-depedDark">Credits: <span id="creditDisplay">...</span></span>
             </div>
         </header>
 
@@ -186,38 +188,59 @@
     <!-- Buy Credits Modal -->
     <div id="buyCreditsModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex justify-center items-center z-50">
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center transform transition-all">
-            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i class="fa fa-exclamation-triangle text-red-500 text-3xl"></i>
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa fa-credit-card text-blue-500 text-3xl"></i>
             </div>
-            <h3 class="text-xl font-bold text-gray-800 mb-2">Out of Credits!</h3>
-            <p class="text-gray-600 text-sm mb-6">You have used up all your available credits. Please purchase more credits to continue exporting lesson plans.</p>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Refill Your Credits</h3>
+            <p class="text-gray-600 text-sm mb-6">Purchase credits via GCash, Maya, or Card to continue generating DepEd ILAW lesson plans.</p>
             <div class="flex gap-3 justify-center">
                 <button id="closeModalBtn" class="btn-secondary !bg-gray-100 !text-gray-700 hover:!bg-gray-200">Cancel</button>
-                <button id="purchaseBtn" class="btn-primary !bg-green-600 hover:!bg-green-700 flex items-center gap-2">
-                    <i class="fa fa-shopping-cart"></i> Buy Credits
+                <button id="purchaseBtn" class="btn-primary !bg-blue-600 hover:!bg-blue-700 flex items-center gap-2">
+                    <i class="fa fa-shopping-cart"></i> Top Up (₱500)
                 </button>
             </div>
         </div>
     </div>
 
     <script>
-        // --- CREDIT SYSTEM SETUP ---
-        const CREDIT_KEY = 'ilaw_credits_balance';
-        const modal = document.getElementById('buyCreditsModal');
+        // --- PAYMONGO & SUPABASE CREDIT SYSTEM SETUP ---
+        // Replace with your actual Supabase project keys
+        const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+        const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
         
-        let storedCredits = localStorage.getItem(CREDIT_KEY);
-        let userCredits;
+        // Initialize Supabase (Mocked connection for structure)
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        const modal = document.getElementById('buyCreditsModal');
+        let userCredits = 0;
+        let currentUserId = "c6396e05-950c-48be-8f78-3a956fa5f4f0"; // Replace with actual logged-in Supabase Auth User ID
 
-        if (storedCredits === null || isNaN(parseInt(storedCredits))) {
-            userCredits = 3;
-            localStorage.setItem(CREDIT_KEY, userCredits);
-        } else {
-            userCredits = parseInt(storedCredits);
+        // 1. Fetch real-time balance from Supabase Database on load
+        async function fetchUserCredits() {
+            try {
+                /* Real Database Implementation:
+                const { data, error } = await supabase
+                    .from('user_credits')
+                    .select('balance')
+                    .eq('user_id', currentUserId)
+                    .single();
+                
+                if (data) userCredits = data.balance;
+                */
+                
+                // Fallback for demo purposes if DB is not active yet:
+                const stored = localStorage.getItem('ilaw_credits_balance');
+                userCredits = stored ? parseInt(stored) : 3;
+
+                document.getElementById('creditDisplay').textContent = userCredits;
+            } catch (err) {
+                console.error('Failed to load credits:', err);
+            }
         }
+        
+        fetchUserCredits();
 
-        document.getElementById('creditDisplay').textContent = userCredits;
-
-        // 1. Validation Helper
+        // 2. Validation Helper
         function hasEnoughCredits() {
             if (userCredits <= 0) {
                 modal.classList.remove('hidden');
@@ -226,11 +249,15 @@
             return true;
         }
 
-        // 3 & 4. Deduct and Save Helper
-        function deductCreditAfterSuccess() {
+        // 3. Deduct Credit (Frontend deduction + Backend Sync)
+        async function deductCreditAfterSuccess() {
             userCredits -= 1;
-            localStorage.setItem(CREDIT_KEY, userCredits);
             document.getElementById('creditDisplay').textContent = userCredits;
+            localStorage.setItem('ilaw_credits_balance', userCredits); // Fallback
+
+            /* Real Database Implementation:
+            await supabase.rpc('deduct_credit', { p_user_id: currentUserId, p_amount: 1 });
+            */
             
             if (userCredits === 0) {
                 setTimeout(() => {
@@ -241,13 +268,45 @@
 
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
         
-        document.getElementById('purchaseBtn').addEventListener('click', () => {
-            alert('Redirecting to payment gateway...');
-            userCredits += 5;
-            localStorage.setItem(CREDIT_KEY, userCredits);
-            document.getElementById('creditDisplay').textContent = userCredits;
-            modal.classList.add('hidden');
-            alert('Test: Added 5 credits successfully!');
+        // 4. PayMongo / Supabase Edge Function Trigger
+        document.getElementById('purchaseBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('purchaseBtn');
+            const originalText = btn.innerHTML;
+            
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Preparing Checkout...';
+            btn.disabled = true;
+
+            try {
+                // Call your custom backend endpoint that builds the PayMongo Link payload
+                /* Real Backend implementation:
+                const response = await fetch('YOUR_BACKEND_TO_CREATE_PAYMONGO_LINK', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: currentUserId,
+                        amount: 50000,          // 500.00 PHP in cents
+                        creditsToAdd: 500,      // Custom metadata for the Webhook to read
+                        description: "500 App Credits"
+                    })
+                });
+
+                const data = await response.json();
+                
+                // Redirect user to the PayMongo GCash/Maya portal
+                window.location.href = data.checkout_url; 
+                */
+
+                // Simulated interaction for demo
+                alert("Redirecting to PayMongo Checkout...\n\n(Once paid, PayMongo triggers the Supabase Webhook to add the credits directly to your database.)");
+                modal.classList.add('hidden');
+
+            } catch (error) {
+                console.error("Payment initiation error:", error);
+                alert("Could not load payment gateway.");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         });
 
         const subjectsDB = {
@@ -580,11 +639,9 @@ Return ONLY a valid JSON object matching this structural schema template exactly
         document.getElementById('exportPdfBtn').addEventListener('click', function() {
             if (!window.ilawDataset) return;
             
-            // 1. Validate
             if (!hasEnoughCredits()) return;
 
             try {
-                // 2. Execute
                 const d = window.ilawDataset;
                 const docDefinition = {
                     pageOrientation: 'landscape',
@@ -653,7 +710,6 @@ Return ONLY a valid JSON object matching this structural schema template exactly
 
                 pdfMake.createPdf(docDefinition).download(`DepEd_ILAW_Matrix_Grade${d.meta.grade}.pdf`);
                 
-                // 3 & 4. Deduct and Save
                 deductCreditAfterSuccess();
 
             } catch (error) {
@@ -666,11 +722,9 @@ Return ONLY a valid JSON object matching this structural schema template exactly
         document.getElementById('exportDocxBtn').addEventListener('click', async function() {
             if (!window.ilawDataset) return;
             
-            // 1. Validate
             if (!hasEnoughCredits()) return;
 
             try {
-                // 2. Execute
                 const d = window.ilawDataset;
                 const { Document, Table, TableRow, TableCell, Paragraph, TextRun, AlignmentType, WidthType, BorderStyle, PageOrientation } = docx;
 
@@ -816,7 +870,6 @@ Return ONLY a valid JSON object matching this structural schema template exactly
                 const blob = await docx.Packer.toBlob(doc);
                 saveAs(blob, `DepEd_ILAW_Matrix_Grade${d.meta.grade}.docx`);
                 
-                // 3 & 4. Deduct and Save
                 deductCreditAfterSuccess();
 
             } catch (error) {
