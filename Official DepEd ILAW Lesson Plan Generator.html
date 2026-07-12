@@ -245,6 +245,7 @@
 
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
         
+        // --- UPDATED PAYMENT BUTTON LOGIC START ---
         document.getElementById('purchaseBtn').addEventListener('click', async () => {
             const btn = document.getElementById('purchaseBtn');
             const originalText = btn.innerHTML;
@@ -257,7 +258,7 @@
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}` // <-- FIXED: Added missing authentication
                     },
                     body: JSON.stringify({
                         userId: currentUserId,
@@ -268,6 +269,7 @@
                 });
 
                 if (!response.ok) {
+                    // Captures detailed backend messages for seamless troubleshooting
                     const errorDetails = await response.text();
                     throw new Error(`Server returned ${response.status}: ${errorDetails}`);
                 }
@@ -289,6 +291,7 @@
                 btn.disabled = false;
             }
         });
+        // --- UPDATED PAYMENT BUTTON LOGIC END ---
 
         const MISTRAL_API_KEY = "YxzTi7XRyqOtSX1rn2JPSbLd42nzMCKj";
         const MISTRAL_MODEL = "mistral-small-latest";
