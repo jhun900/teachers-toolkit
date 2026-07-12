@@ -190,7 +190,7 @@
                 <i class="fa fa-exclamation-triangle text-red-500 text-3xl"></i>
             </div>
             <h3 class="text-xl font-bold text-gray-800 mb-2">Out of Credits!</h3>
-            <p class="text-gray-600 text-sm mb-6">You have used up all your available credits. Please purchase more credits to continue generating lesson plans.</p>
+            <p class="text-gray-600 text-sm mb-6">You have used up all your available credits. Please purchase more credits to continue exporting lesson plans.</p>
             <div class="flex gap-3 justify-center">
                 <button id="closeModalBtn" class="btn-secondary !bg-gray-100 !text-gray-700 hover:!bg-gray-200">Cancel</button>
                 <button id="purchaseBtn" class="btn-primary !bg-green-600 hover:!bg-green-700 flex items-center gap-2">
@@ -201,31 +201,52 @@
     </div>
 
     <script>
-        // Credit System Setup
+        // --- CREDIT SYSTEM SETUP ---
         const CREDIT_KEY = 'ilaw_credits_balance';
+        const modal = document.getElementById('buyCreditsModal');
         
-        // Retrieve stored credits, or default to 3 if first time loading
-        let userCredits = localStorage.getItem(CREDIT_KEY);
-        if (userCredits === null) {
+        // Retrieve stored credits safely, parse as integer to prevent NaN/String bugs on refresh
+        let storedCredits = localStorage.getItem(CREDIT_KEY);
+        let userCredits;
+
+        if (storedCredits === null || isNaN(parseInt(storedCredits))) {
             userCredits = 3;
             localStorage.setItem(CREDIT_KEY, userCredits);
         } else {
-            userCredits = parseInt(userCredits);
+            userCredits = parseInt(storedCredits);
         }
 
         // Initialize UI with current credits
         document.getElementById('creditDisplay').textContent = userCredits;
 
+        // Function to consume a credit on export
+        function consumeExportCredit() {
+            if (userCredits <= 0) {
+                modal.classList.remove('hidden');
+                return false; // Deny export
+            }
+            
+            // Deduct 1 credit
+            userCredits -= 1;
+            localStorage.setItem(CREDIT_KEY, userCredits);
+            document.getElementById('creditDisplay').textContent = userCredits;
+            
+            // Trigger popup immediately if all 3 free credits are now used up
+            if (userCredits === 0) {
+                setTimeout(() => {
+                    modal.classList.remove('hidden');
+                }, 1000); // Slight delay to allow file download to start
+            }
+            
+            return true; // Allow export
+        }
+
         // Modal Functionality
-        const modal = document.getElementById('buyCreditsModal');
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
         
         // Placeholder for actual purchase logic
         document.getElementById('purchaseBtn').addEventListener('click', () => {
             alert('Redirecting to payment gateway...');
-            // In a real app, redirect or open payment popup here
-            // e.g. window.location.href = '/buy-credits';
-            
             // For testing: simulating a purchase adding 5 credits
             userCredits += 5;
             localStorage.setItem(CREDIT_KEY, userCredits);
@@ -297,10 +318,10 @@
         };
 
         document.getElementById('generateBtn').addEventListener('click', async function() {
-            // ----- CREDIT CHECK -----
+            // Block generation if completely out of credits
             if (userCredits <= 0) {
                 modal.classList.remove('hidden');
-                return; // Stop generation
+                return;
             }
 
             const grade = document.getElementById('grade').value;
@@ -312,11 +333,6 @@
                 alert('Please fill out all mandatory fields marked with an asterisk (*). All inputs remain blank by default.');
                 return;
             }
-
-            // Deduct credit before API execution to prevent double submission exploits
-            userCredits -= 1;
-            localStorage.setItem(CREDIT_KEY, userCredits);
-            document.getElementById('creditDisplay').textContent = userCredits;
 
             const btn = this;
             btn.classList.add('loading');
@@ -433,12 +449,6 @@ Return ONLY a valid JSON object matching this structural schema template exactly
 
             } catch (error) {
                 alert('Generation Fault: ' + error.message);
-                
-                // Refund credit if API fails
-                userCredits += 1;
-                localStorage.setItem(CREDIT_KEY, userCredits);
-                document.getElementById('creditDisplay').textContent = userCredits;
-                
             } finally {
                 btn.classList.remove('loading');
                 btn.innerHTML = '<i class="fa fa-magic"></i> Generate ILAW Lesson Plan';
@@ -575,9 +585,13 @@ Return ONLY a valid JSON object matching this structural schema template exactly
             return { stack: contentParts };
         }
 
-        // PDF Matrix Exporter (Explicit Font Size 10)
+        // PDF Matrix Exporter
         document.getElementById('exportPdfBtn').addEventListener('click', function() {
-            if(!window.ilawDataset) return;
+            if (!window.ilawDataset) return;
+            
+            // Call deduction function before building document
+            if (!consumeExportCredit()) return;
+
             const d = window.ilawDataset;
 
             const docDefinition = {
@@ -648,9 +662,13 @@ Return ONLY a valid JSON object matching this structural schema template exactly
             pdfMake.createPdf(docDefinition).download(`DepEd_ILAW_Matrix_Grade${d.meta.grade}.pdf`);
         });
 
-        // DOCX Matrix Exporter (Fixed Standards Arrangement & Font Size 10)
+        // DOCX Matrix Exporter
         document.getElementById('exportDocxBtn').addEventListener('click', async function() {
-            if(!window.ilawDataset) return;
+            if (!window.ilawDataset) return;
+            
+            // Call deduction function before building document
+            if (!consumeExportCredit()) return;
+
             const d = window.ilawDataset;
             const { Document, Table, TableRow, TableCell, Paragraph, TextRun, AlignmentType, WidthType, BorderStyle, PageOrientation } = docx;
 
