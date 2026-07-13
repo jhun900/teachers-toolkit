@@ -248,17 +248,15 @@
         async function fetchUserCredits() {
             try {
                 const stored = localStorage.getItem('ilaw_credits_balance');
-                const bonusGranted = localStorage.getItem('ilaw_welcome_bonus_granted');
+                const hasSpentCredits = localStorage.getItem('ilaw_has_spent_credits');
 
-                if (!bonusGranted) {
-                    // Fix: Enforce the 5 free credits welcome bonus for first-time users overriding accidental zeros
+                // FIX: If balance doesn't exist, OR if balance is 0 but the user has never legitimately spent credits (the cache bug)
+                if (!stored || (parseInt(stored) === 0 && !hasSpentCredits)) {
                     userCredits = 5;
                     localStorage.setItem('ilaw_credits_balance', userCredits);
-                    localStorage.setItem('ilaw_welcome_bonus_granted', 'true');
                 } else {
-                    // Returning user logic
-                    userCredits = (stored !== null && stored !== "") ? parseInt(stored) : 0;
-                    if (isNaN(userCredits)) userCredits = 0; 
+                    userCredits = parseInt(stored);
+                    if (isNaN(userCredits)) userCredits = 5; 
                 }
 
                 document.getElementById('creditDisplay').textContent = userCredits;
@@ -281,8 +279,11 @@
 
         async function deductCreditAfterSuccess() {
             userCredits -= 1;
+            if (userCredits < 0) userCredits = 0; // Prevent negatives
+            
             document.getElementById('creditDisplay').textContent = userCredits;
             localStorage.setItem('ilaw_credits_balance', userCredits); 
+            localStorage.setItem('ilaw_has_spent_credits', 'true'); // Flag legitimate usage
             
             if (userCredits === 0) {
                 setTimeout(() => {
