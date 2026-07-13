@@ -14,7 +14,7 @@
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
-    <style type="text/tailwind">
+    <style type="text/tailwindcss">
         .tos-table, .test-table, .key-table { 
             @apply w-full border-collapse my-4 text-xs md:text-sm; 
         }
@@ -55,8 +55,8 @@
         
         <div id="user-dashboard" class="hidden flex items-center gap-3 bg-white p-2 px-4 rounded-full shadow-sm border border-gray-200">
             <span id="user-email" class="text-sm font-medium text-gray-600 hidden md:inline"></span>
-            <button onclick="buyCredits()" class="text-sm bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-full transition">Buy Credits</button>
-            <button onclick="logout()" class="text-sm text-red-500 hover:text-red-700 font-medium ml-2 border-l pl-3">Logout</button>
+            <button id="buyCreditsBtn" class="text-sm bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-full transition">Buy Credits</button>
+            <button id="logoutBtn" class="text-sm text-red-500 hover:text-red-700 font-medium ml-2 border-l pl-3">Logout</button>
         </div>
     </div>
 
@@ -141,7 +141,7 @@ Demonstrate understanding of the correct use of verbs in sentences.
 Classify various materials as solid, liquid, or gas based on attributes."></textarea>
         </div>
 
-        <button onclick="generateAll()" id="generateBtn" class="mt-5 w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded transition flex justify-center items-center gap-2">
+        <button id="generateBtn" class="mt-5 w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded transition flex justify-center items-center gap-2">
             Generate TOS & Test Questions
         </button>
         <p id="status" class="mt-3 text-center text-sm font-medium h-5"></p>
@@ -149,8 +149,8 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
 
     <div id="output" class="hidden">
         <div class="flex gap-3 mb-4">
-            <button onclick="consumeCreditAndExport('pdf')" class="btn btn-pdf">Export as PDF (Cost: 1 Credit)</button>
-            <button onclick="consumeCreditAndExport('word')" class="btn btn-word">Export as Word (Cost: 1 Credit)</button>
+            <button id="exportPdfBtn" class="btn btn-pdf">Export as PDF (Cost: 1 Credit)</button>
+            <button id="exportWordBtn" class="btn btn-word">Export as Word (Cost: 1 Credit)</button>
         </div>
 
         <div id="documentPrintView" class="space-y-6">
@@ -207,8 +207,24 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
         let currentUserCredits = 0;
         let creditSubscription = null;
 
-        window.onload = function () {
-            if (typeof google !== 'undefined') {
+        // Set up programmatic listeners on load to ensure functional scope binding
+        document.addEventListener("DOMContentLoaded", () => {
+            const generateBtn = document.getElementById("generateBtn");
+            if (generateBtn) generateBtn.addEventListener("click", generateAll);
+
+            const exportPdfBtn = document.getElementById("exportPdfBtn");
+            if (exportPdfBtn) exportPdfBtn.addEventListener("click", () => consumeCreditAndExport('pdf'));
+
+            const exportWordBtn = document.getElementById("exportWordBtn");
+            if (exportWordBtn) exportWordBtn.addEventListener("click", () => consumeCreditAndExport('word'));
+
+            const buyCreditsBtn = document.getElementById("buyCreditsBtn");
+            if (buyCreditsBtn) buyCreditsBtn.addEventListener("click", buyCredits);
+
+            const logoutBtn = document.getElementById("logoutBtn");
+            if (logoutBtn) logoutBtn.addEventListener("click", logout);
+
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
                 google.accounts.id.initialize({
                     client_id: GOOGLE_CLIENT_ID,
                     callback: handleGoogleLogin
@@ -218,7 +234,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                     { theme: "outline", size: "large", type: "standard" }
                 );
             }
-        };
+        });
 
         function decodeJwtResponse(token) {
             let base64Url = token.split('.')[1];
@@ -376,7 +392,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
 
         async function callMistral(prompt) {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout safeguard
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
             try {
                 const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
@@ -401,7 +417,6 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                 const data = await response.json();
                 let rawContent = data.choices[0].message.content.trim();
                 
-                // Safety net: aggressively strip markdown formatting if the AI ignores formatting instructions
                 rawContent = rawContent.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
                 return JSON.parse(rawContent);
             } catch (error) {
@@ -443,7 +458,6 @@ Return ONLY a valid JSON object matching this structure:
                 return await callMistral(prompt);
             } catch (err) {
                 console.warn("Mistral Fallback used due to network/parsing error", err);
-                // Safe Fallback ensures the generation loop never permanently halts
                 return {
                     question: outputLang === "Tagalog" ? `Suriin ang kaisipan na may kaugnayan sa: ${competencyDesc}. Ano ang angkop na kahulugan nito?` : `Analyze the context regarding: ${competencyDesc}. What is its correct execution?`,
                     options: outputLang === "Tagalog" ? ["A. Maling pagpipilian A", "B. Tamang sagot sa pagsusuri", "C. Maling pagpipilian C", "D. Maling pagpipilian D"] : ["A. Distractor Option One", "B. Correct Evaluation Option", "C. Distractor Option Two", "D. Distractor Option Three"],
@@ -555,6 +569,14 @@ Return ONLY a valid JSON object matching this structure:
                     .map(desc => ({ desc: desc, code: "N/A", days: "N/A" }));
 
                 const compCount = competencies.length;
+                if (compCount === 0) {
+                    alert("Please enter at least one valid competency.");
+                    btn.disabled = false;
+                    btn.classList.remove("opacity-75", "cursor-not-allowed");
+                    status.textContent = "";
+                    return;
+                }
+
                 const cogTotal = getCognitiveTotal(total);
                 const perComp = Math.floor(total / compCount);
                 const remainder = total % compCount;
@@ -573,7 +595,6 @@ Return ONLY a valid JSON object matching this structure:
                     const cogRow = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
 
                     for (let j = 0; j < itemsForComp; j++) {
-                        // Live UI update for User Context
                         status.textContent = `Generating AI test items: Processing question ${currentItem} of ${total}... please wait.`;
 
                         let selectedDomain;
