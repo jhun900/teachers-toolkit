@@ -14,7 +14,7 @@
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
-    <style>
+    <style type="text/tailwind">
         .tos-table, .test-table, .key-table { 
             @apply w-full border-collapse my-4 text-xs md:text-sm; 
         }
@@ -913,5 +913,13 @@ th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
         <tbody>${keyRowsHtml}</tbody>
     </table>
 </div>
+</body>
+</html>
+`;
+
+            const blob = new Blob(['\ufeff' + wordContent], { type: 'application/msword' });
+            saveAs(blob, `TOS_and_Assessment_Matrix.doc`);
+        }
+    </script>
 </body>
 </html>
