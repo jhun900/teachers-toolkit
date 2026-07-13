@@ -237,7 +237,35 @@
         
         const modal = document.getElementById('buyCreditsModal');
         let userCredits = 0;
-        let currentUserId = "c6396e05-950c-48be-8f78-3a956fa5f4f0"; 
+
+        // --- DYNAMIC USER ID ASSIGNMENT FIX ---
+        // Dynamically grabs the authenticated user's email from the Dashboard gatekeeper.
+        // If not found, generates a unique fallback ID to prevent Database collision.
+        function getOrCreateUserId() {
+            try {
+                const sessionStr = localStorage.getItem('deped_active_session');
+                if (sessionStr) {
+                    const session = JSON.parse(sessionStr);
+                    if (session.email) return session.email;
+                }
+            } catch(e) {}
+            
+            let storedId = localStorage.getItem('ilaw_user_uuid');
+            if (storedId) return storedId;
+            
+            const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+            localStorage.setItem('ilaw_user_uuid', newId);
+            return newId;
+        }
+
+        let currentUserId = getOrCreateUserId();
+        
+        // Isolate local storage keys per user to prevent cache bleeding
+        const balKey = `ilaw_credits_balance_${currentUserId}`;
+        const spentKey = `ilaw_has_spent_credits_${currentUserId}`;
 
         // Helper: Cookie storage (Survives LocalStorage wipes)
         function setCookie(name, value, days = 365) {
@@ -312,19 +340,19 @@
 
             // 1. LocalStorage & SessionStorage
             try {
-                localStorage.setItem('ilaw_credits_balance', balance.toString());
-                localStorage.setItem('ilaw_has_spent_credits', spentStr);
-                sessionStorage.setItem('ilaw_credits_balance', balance.toString());
-                sessionStorage.setItem('ilaw_has_spent_credits', spentStr);
+                localStorage.setItem(balKey, balance.toString());
+                localStorage.setItem(spentKey, spentStr);
+                sessionStorage.setItem(balKey, balance.toString());
+                sessionStorage.setItem(spentKey, spentStr);
             } catch (e) { console.warn('LocalStorage error:', e); }
 
             // 2. Persistent Cookies
-            setCookie('ilaw_credits_balance', balance.toString(), 365);
-            setCookie('ilaw_has_spent_credits', spentStr, 365);
+            setCookie(balKey, balance.toString(), 365);
+            setCookie(spentKey, spentStr, 365);
 
             // 3. IndexedDB
-            await setIDB('ilaw_credits_balance', balance);
-            await setIDB('ilaw_has_spent_credits', hasSpent);
+            await setIDB(balKey, balance);
+            await setIDB(spentKey, hasSpent);
 
             // 4. Supabase Remote Database (Single Source of Truth against cache clearing)
             try {
@@ -368,15 +396,15 @@
                 }
 
                 // Step 2: Fallback to querying client storage layers (LocalStorage, Cookie, IndexedDB, SessionStorage)
-                const lsBalance = localStorage.getItem('ilaw_credits_balance');
-                const cookieBalance = getCookie('ilaw_credits_balance');
-                const idbBalance = await getIDB('ilaw_credits_balance');
-                const ssBalance = sessionStorage.getItem('ilaw_credits_balance');
+                const lsBalance = localStorage.getItem(balKey);
+                const cookieBalance = getCookie(balKey);
+                const idbBalance = await getIDB(balKey);
+                const ssBalance = sessionStorage.getItem(balKey);
 
-                const lsSpent = localStorage.getItem('ilaw_has_spent_credits') === 'true';
-                const cookieSpent = getCookie('ilaw_has_spent_credits') === 'true';
-                const idbSpent = (await getIDB('ilaw_has_spent_credits')) === true || (await getIDB('ilaw_has_spent_credits')) === 'true';
-                const ssSpent = sessionStorage.getItem('ilaw_has_spent_credits') === 'true';
+                const lsSpent = localStorage.getItem(spentKey) === 'true';
+                const cookieSpent = getCookie(spentKey) === 'true';
+                const idbSpent = (await getIDB(spentKey)) === true || (await getIDB(spentKey)) === 'true';
+                const ssSpent = sessionStorage.getItem(spentKey) === 'true';
 
                 const hasSpentAnywhere = lsSpent || cookieSpent || idbSpent || ssSpent;
 
@@ -403,7 +431,7 @@
                 }
             } catch (err) {
                 console.error('Failed to load credits:', err);
-                userCredits = localStorage.getItem('ilaw_credits_balance') ? parseInt(localStorage.getItem('ilaw_credits_balance')) : 5;
+                userCredits = localStorage.getItem(balKey) ? parseInt(localStorage.getItem(balKey)) : 5;
                 if (isNaN(userCredits)) userCredits = 5;
                 document.getElementById('creditDisplay').textContent = userCredits;
             }
