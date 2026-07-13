@@ -194,20 +194,20 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
         /* =========================================================
            === AUTHENTICATION & CREDIT SYSTEM LOGIC === 
            ========================================================= */
-        let supabase = null;
+        let dbClient = null; // Renamed from 'supabase' to completely avoid CDN conflict
         try {
             if (window.supabase) {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             }
         } catch (e) {
-            console.warn("Supabase library not loaded. Ensure you are connected to the internet.");
+            console.warn("Supabase library not loaded. Operating in local mode.");
         }
 
         let currentUserEmail = null;
         let currentUserCredits = 0;
         let creditSubscription = null;
 
-        // Set up programmatic listeners on load to ensure functional scope binding
+        // Clean, programmatic event bindings
         document.addEventListener("DOMContentLoaded", () => {
             const generateBtn = document.getElementById("generateBtn");
             if (generateBtn) generateBtn.addEventListener("click", generateAll);
@@ -249,7 +249,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             const payload = decodeJwtResponse(response.credential);
             currentUserEmail = payload.email;
 
-            if (!supabase) {
+            if (!dbClient) {
                 console.warn("Operating offline or database inaccessible. Proceeding with local state.");
                 currentUserCredits = 3;
                 updateAuthUI();
@@ -257,7 +257,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             }
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await dbClient
                     .from('users')
                     .select('credits')
                     .eq('email', currentUserEmail)
@@ -269,7 +269,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                     currentUserCredits = data.credits;
                 } else {
                     currentUserCredits = 3;
-                    await supabase.from('users').insert([{ email: currentUserEmail, credits: currentUserCredits }]);
+                    await dbClient.from('users').insert([{ email: currentUserEmail, credits: currentUserCredits }]);
                 }
 
                 updateAuthUI();
@@ -281,10 +281,10 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
         }
 
         function setupRealtimeCredits() {
-            if (!supabase) return;
-            if (creditSubscription) supabase.removeChannel(creditSubscription);
+            if (!dbClient) return;
+            if (creditSubscription) dbClient.removeChannel(creditSubscription);
 
-            creditSubscription = supabase
+            creditSubscription = dbClient
                 .channel('schema-db-changes')
                 .on(
                     'postgres_changes',
@@ -320,8 +320,8 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             currentUserEmail = null;
             currentUserCredits = 0;
             updateAuthUI();
-            if (creditSubscription && supabase) {
-                supabase.removeChannel(creditSubscription);
+            if (creditSubscription && dbClient) {
+                dbClient.removeChannel(creditSubscription);
                 creditSubscription = null;
             }
             if (typeof google !== 'undefined') {
@@ -331,10 +331,10 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
 
         async function buyCredits() {
             if (!currentUserEmail) return alert("Please sign in first.");
-            if (!supabase) return alert("Database is currently unreachable.");
+            if (!dbClient) return alert("Database is currently unreachable.");
             
             try {
-                const { data, error } = await supabase.functions.invoke('create-payment-link', {
+                const { data, error } = await dbClient.functions.invoke('create-payment-link', {
                     body: { email: currentUserEmail, amount: 10000, description: '10 Export Credits' }
                 });
 
@@ -363,8 +363,8 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                 currentUserCredits -= 1;
                 updateAuthUI();
 
-                if (supabase) {
-                    const { error } = await supabase
+                if (dbClient) {
+                    const { error } = await dbClient
                         .from('users')
                         .update({ credits: currentUserCredits })
                         .eq('email', currentUserEmail);
@@ -379,7 +379,6 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
         /* =========================================================
            === AI & GENERATOR LOGIC === 
            ========================================================= */
-
         const COGNITIVE = {
             remembering: { label: "Remembering", percent: 25 },
             understanding: { label: "Understanding", percent: 30 },
@@ -731,7 +730,6 @@ Return ONLY a valid JSON object matching this structure:
         /* =========================================================
            === DOCUMENT EXPORT LOGIC === 
            ========================================================= */
-
         function exportPDF() {
             if (!window.generatedData) { alert("Please compile a matrix first!"); return; }
             const { jsPDF } = window.jspdf;
