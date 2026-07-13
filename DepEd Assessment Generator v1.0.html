@@ -263,6 +263,62 @@ Return ONLY a valid JSON object matching this structure:
             }
         }
 
+        // Helper function to dynamically shuffle options and fix structural answer patterns
+        function randomizeOptions(q) {
+            if (!q || !Array.isArray(q.options) || q.options.length === 0) return q;
+
+            // Extract text from choices without the standard letter prefixes
+            let rawOptions = q.options.map(opt => opt.replace(/^[A-D]\.\s*/i, "").trim());
+            let originalCorrectText = "";
+
+            if (q.correct) {
+                let trimmedCorrect = q.correct.trim();
+                // 1. Check for full matching option string
+                let idx = q.options.findIndex(o => o.trim() === trimmedCorrect);
+                if (idx !== -1) {
+                    originalCorrectText = rawOptions[idx];
+                } else {
+                    // 2. Check for matching string text without prefixes
+                    let cleanCorrect = trimmedCorrect.replace(/^[A-D]\.\s*/i, "").trim();
+                    let cleanIdx = rawOptions.indexOf(cleanCorrect);
+                    if (cleanIdx !== -1) {
+                        originalCorrectText = rawOptions[cleanIdx];
+                    } else if (["A", "B", "C", "D"].includes(trimmedCorrect.toUpperCase())) {
+                        // 3. Fallback handle if correct key was returned strictly as a singular letter
+                        let labelIdx = ["A", "B", "C", "D"].indexOf(trimmedCorrect.toUpperCase());
+                        if (rawOptions[labelIdx]) originalCorrectText = rawOptions[labelIdx];
+                    } else {
+                        originalCorrectText = cleanCorrect;
+                    }
+                }
+            }
+
+            // Absolute baseline fallback default to avoid breaking compilation sequence
+            if (!originalCorrectText || !rawOptions.includes(originalCorrectText)) {
+                originalCorrectText = rawOptions[0];
+            }
+
+            // Fisher-Yates Random Shuffling Process
+            for (let i = rawOptions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [rawOptions[i], rawOptions[j]] = [rawOptions[j], rawOptions[i]];
+            }
+
+            // Map choices back to clear prefixes (A, B, C, D)
+            const labels = ["A", "B", "C", "D"];
+            q.options = rawOptions.map((text, idx) => `${labels[idx]}. ${text}`);
+
+            // Re-identify the new corresponding position of the correct option
+            let newIdx = rawOptions.indexOf(originalCorrectText);
+            if (newIdx !== -1) {
+                q.correct = q.options[newIdx];
+            } else {
+                q.correct = q.options[0];
+            }
+
+            return q;
+        }
+
         function getCognitiveTotal(total) {
             let dist = {};
             let sum = 0;
@@ -343,7 +399,11 @@ Return ONLY a valid JSON object matching this structure:
                     cogAssigned[selectedDomain]++;
                     cogRow[selectedDomain]++;
 
-                    const q = await generateAIQuestion(competencies[i].desc, selectedDomain, subject, grade, outputLang);
+                    let q = await generateAIQuestion(competencies[i].desc, selectedDomain, subject, grade, outputLang);
+                    
+                    // Shuffle option placements seamlessly right after receiving the structural JSON data object
+                    q = randomizeOptions(q);
+
                     q.itemNo = currentItem;
                     q.domain = selectedDomain;
                     testItems.push(q);
@@ -465,17 +525,15 @@ Return ONLY a valid JSON object matching this structure:
             const d = window.generatedData;
             let y = 15;
 
-            // Helper function to sanitize text strings from hidden copy-paste characters
             const sanitizeText = (text) => {
                 if (!text) return "";
                 return text
-                    .replace(/[\u200B-\u200D\uFEFF]/g, "") // Removes zero-width spaces
-                    .replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u0400-\u04FF]/g, " ") // Validates normal spectrum printable text
+                    .replace(/[\u200B-\u200D\uFEFF]/g, "") 
+                    .replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u0400-\u04FF]/g, " ") 
                     .replace(/\s+/g, " ")
                     .trim();
             };
 
-            // Header Elements
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
             doc.text("Republic of the Philippines", 105, y, { align: "center" }); y += 5;
@@ -517,7 +575,7 @@ Return ONLY a valid JSON object matching this structure:
                 headStyles: { fillColor: "#f3f4f6", textColor: "#111111", fontStyle: "bold" },
                 footStyles: { fillColor: "#16a34a", textColor: "#ffffff", fontStyle: "bold" },
                 columnStyles: {
-                    1: { cellWidth: 65 } // Prevent long competency statements from overlapping columns
+                    1: { cellWidth: 65 } 
                 }
             });
 
@@ -533,7 +591,6 @@ Return ONLY a valid JSON object matching this structure:
                 const stem = `${q.itemNo}. ${sanitizeText(q.question)}`;
                 const stemLines = doc.splitTextToSize(stem, 180);
                 
-                // Track page vertical overflow dynamically
                 if (y + (stemLines.length * 5) > 275) { doc.addPage(); y = 20; }
                 doc.text(stemLines, 15, y);
                 y += (stemLines.length * 5) + 2;
@@ -568,12 +625,10 @@ Return ONLY a valid JSON object matching this structure:
             doc.save(`TOS_Assessment_Portrait.pdf`);
         }
 
-        // Reliable Word Document HTML Blob Export (Strictly Portrait, 12pt Font)
         function exportWord() {
             if (!window.generatedData) { alert("Please compile a matrix first!"); return; }
             const d = window.generatedData;
 
-            // Generate clean clean tables and strings matching 12pt portrait
             let tosRowsHtml = d.tosData.map(r => `
                 <tr>
                     <td style="text-align:center;">${r.no}</td>
@@ -615,7 +670,7 @@ Return ONLY a valid JSON object matching this structure:
 <title>DepEd Assessment & TOS Matrix</title>
 <style>
 @page Section1 {
-    size: 210mm 297mm; /* Standard Portrait A4 dimensions */
+    size: 210mm 297mm; 
     margin: 20mm 20mm 20mm 20mm;
     mso-page-orientation: portrait;
 }
@@ -624,12 +679,12 @@ div.Section1 {
 }
 body {
     font-family: 'Arial', sans-serif;
-    font-size: 12pt; /* Mandated Standard 12pt Font Size */
+    font-size: 12pt; 
     line-height: 1.25;
     color: #000000;
 }
 p, div, h1, h2, h3, td, th {
-    font-size: 12pt !important; /* Force all regular content to standard 12pt */
+    font-size: 12pt !important; 
 }
 .header-container {
     text-align: center;
