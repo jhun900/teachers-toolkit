@@ -180,23 +180,21 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
     <script>
         /* =========================================================
            === CONFIGURATION & CREDENTIALS === 
-           Paste your API keys and credentials here.
            ========================================================= */
         const MISTRAL_API_KEY = "GVgRqeTk5bdH4GYa10FRAw7hC3x2vqyF"; 
         
-        const GOOGLE_CLIENT_ID = "234617879687-3crdscg9v65u7d531o6dgf3ma47f6nr2.apps.googleusercontent.com"; // e.g. "123456789-abcdef.apps.googleusercontent.com"
+        const GOOGLE_CLIENT_ID = "234617879687-3crdscg9v65u7d531o6dgf3ma47f6nr2.apps.googleusercontent.com"; 
         
         const SUPABASE_URL = "https://pxuzrjppausjldkyfpbe.supabase.co"; 
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4dXpyanBwYXVzamxka3lmcGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTUzMDcsImV4cCI6MjA5OTQzMTMwN30.alC3JldmwWoR9x2k1BnjyNuZcaDTk_-V2VtPdFh56sk";
         
-        // IMPORTANT: Exposing the PayMongo Secret Key client-side is insecure for production. 
-        // Best practice is generating the payment link via your backend/Supabase edge functions.
-        const PAYMONGO_SECRET_KEY = "YOUR_PAYMONGO_SECRET_KEY_HERE"; 
+        // PayMongo Secret Key has been entirely removed from the frontend!
+        // The Edge Function will handle the payment generation securely.
 
         /* =========================================================
            === AUTHENTICATION & CREDIT SYSTEM LOGIC === 
            ========================================================= */
-        const supabase = supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         let currentUserEmail = null;
         let currentUserCredits = 0;
 
@@ -227,7 +225,6 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             currentUserEmail = payload.email;
 
             try {
-                // Fetch user from Supabase
                 const { data, error } = await supabase
                     .from('users')
                     .select('credits')
@@ -239,7 +236,6 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                 if (data) {
                     currentUserCredits = data.credits;
                 } else {
-                    // New user: Insert into DB with 3 free starting credits
                     currentUserCredits = 3;
                     await supabase.from('users').insert([{ email: currentUserEmail, credits: currentUserCredits }]);
                 }
@@ -275,38 +271,29 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
         async function buyCredits() {
             if (!currentUserEmail) return alert("Please sign in first.");
             
-            // Standard PayMongo Link Creation (Creating 10 credits for 100 PHP as an example)
-            const options = {
-                method: 'POST',
-                headers: {
-                    accept: 'application/json',
-                    'content-type': 'application/json',
-                    authorization: 'Basic ' + btoa(PAYMONGO_SECRET_KEY + ':')
-                },
-                body: JSON.stringify({
-                    data: {
-                        attributes: {
-                            amount: 10000, // Amount in cents (100.00 PHP)
-                            description: '10 Export Credits for DepEd Assessment Generator',
-                            remarks: currentUserEmail
-                        }
-                    }
-                })
-            };
-
             try {
-                const response = await fetch('https://api.paymongo.com/v1/links', options);
-                const data = await response.json();
+                // Securely call the Supabase Edge Function to handle PayMongo link generation
+                const { data, error } = await supabase.functions.invoke('create-payment-link', {
+                    body: { 
+                        email: currentUserEmail,
+                        amount: 10000, // Amount in cents (100.00 PHP)
+                        description: '10 Export Credits for DepEd Assessment Generator'
+                    }
+                });
+
+                if (error) {
+                    throw new Error("Failed to invoke edge function");
+                }
                 
-                if (data && data.data && data.data.attributes && data.data.attributes.checkout_url) {
-                    window.open(data.data.attributes.checkout_url, '_blank');
-                    alert("A payment window has opened. Note: In a full production setup, a PayMongo Webhook should listen for successful payment to automatically add credits to Supabase.");
+                if (data && data.checkout_url) {
+                    window.open(data.checkout_url, '_blank');
+                    alert("A payment window has opened. Credits will be automatically added to your account upon successful payment.");
                 } else {
-                    alert("Failed to generate payment link. Check your PayMongo credentials.");
+                    alert("Failed to generate payment link. Please check your backend logs.");
                 }
             } catch (err) {
-                console.error(err);
-                alert("Payment gateway error.");
+                console.error("Payment generation error:", err);
+                alert("Payment gateway error. Ensure your Edge Function 'create-payment-link' is deployed correctly.");
             }
         }
 
@@ -321,14 +308,12 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             }
 
             try {
-                // Execute export function based on user choice
                 if (type === 'pdf') {
                     exportPDF();
                 } else if (type === 'word') {
                     exportWord();
                 }
 
-                // Deduct credit locally and in database
                 currentUserCredits -= 1;
                 updateAuthUI();
 
@@ -344,7 +329,6 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                 alert("Export succeeded, but there was an error updating your credit balance.");
             }
         }
-
 
         /* =========================================================
            === AI & GENERATOR LOGIC === 
@@ -450,7 +434,6 @@ Return ONLY a valid JSON object matching this structure:
             }
         }
 
-        // Helper function to dynamically shuffle options and fix structural answer patterns
         function randomizeOptions(q) {
             if (!q || !Array.isArray(q.options) || q.options.length === 0) return q;
 
