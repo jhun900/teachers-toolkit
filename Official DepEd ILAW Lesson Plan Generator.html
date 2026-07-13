@@ -186,7 +186,7 @@
         </div>
     </div>
 
-    <!-- Buy Credits Modal (Redesigned to match Screenshot 2026-07-13 090523.jpg) -->
+    <!-- Buy Credits Modal -->
     <div id="buyCreditsModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex justify-center items-center z-50">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-md text-center transform transition-all pt-8 pb-6 px-8">
             <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
@@ -248,10 +248,24 @@
         async function fetchUserCredits() {
             try {
                 const stored = localStorage.getItem('ilaw_credits_balance');
-                userCredits = stored ? parseInt(stored) : 3;
+                const bonusGranted = localStorage.getItem('ilaw_welcome_bonus_granted');
+
+                if (!bonusGranted) {
+                    // Fix: Enforce the 5 free credits welcome bonus for first-time users overriding accidental zeros
+                    userCredits = 5;
+                    localStorage.setItem('ilaw_credits_balance', userCredits);
+                    localStorage.setItem('ilaw_welcome_bonus_granted', 'true');
+                } else {
+                    // Returning user logic
+                    userCredits = (stored !== null && stored !== "") ? parseInt(stored) : 0;
+                    if (isNaN(userCredits)) userCredits = 0; 
+                }
+
                 document.getElementById('creditDisplay').textContent = userCredits;
             } catch (err) {
                 console.error('Failed to load credits:', err);
+                userCredits = 5; // Safe Fallback 
+                document.getElementById('creditDisplay').textContent = userCredits;
             }
         }
         
@@ -281,13 +295,12 @@
         document.getElementById('headerTopUpBtn').addEventListener('click', () => modal.classList.remove('hidden'));
 
         // --- DYNAMIC TIER SELECTION LOGIC ---
-        let selectedTier = { id: 'tier_6', price: 500, credits: 500 }; // Default to highest tier (tier_6)
+        let selectedTier = { id: 'tier_6', price: 500, credits: 500 }; 
         const tierCards = document.querySelectorAll('.tier-card');
         const btnPriceDisplay = document.getElementById('btnPriceDisplay');
 
         tierCards.forEach(card => {
             card.addEventListener('click', () => {
-                // Clear active states on all cards
                 tierCards.forEach(c => {
                     c.classList.remove('border-blue-600', 'bg-blue-50', 'shadow-sm');
                     c.classList.add('border-gray-200');
@@ -295,20 +308,17 @@
                     c.querySelector('.price-text').classList.add('text-gray-500');
                 });
                 
-                // Set active state on clicked card
                 card.classList.remove('border-gray-200');
                 card.classList.add('border-blue-600', 'bg-blue-50', 'shadow-sm');
                 card.querySelector('.price-text').classList.remove('text-gray-500');
                 card.querySelector('.price-text').classList.add('text-blue-600');
                 
-                // Update selected data variables
                 selectedTier = {
                     id: card.getAttribute('data-id'),
                     price: parseInt(card.getAttribute('data-price')),
                     credits: parseInt(card.getAttribute('data-credits'))
                 };
                 
-                // Update Top Up button UI text
                 btnPriceDisplay.textContent = selectedTier.price;
             });
         });
@@ -330,8 +340,8 @@
                     },
                     body: JSON.stringify({
                         userId: currentUserId,
-                        planId: selectedTier.id,                          // e.g. tier_1, tier_2, ..., tier_6
-                        amount: selectedTier.price * 100,                 // centavos calculation
+                        planId: selectedTier.id,                          
+                        amount: selectedTier.price * 100,                 
                         creditsToAdd: selectedTier.credits,               
                         description: `${selectedTier.credits} App Credits`
                     })
@@ -508,7 +518,6 @@ Return ONLY a valid JSON object matching this structural schema template exactly
 
                 const data = await response.json();
                 
-                // Strip Markdown fences if the AI forgets to output pure JSON
                 let aiContent = data.choices[0].message.content.trim();
                 if (aiContent.startsWith('```')) {
                     aiContent = aiContent.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '');
