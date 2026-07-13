@@ -141,10 +141,10 @@ Demonstrate understanding of the correct use of verbs in sentences.
 Classify various materials as solid, liquid, or gas based on attributes."></textarea>
         </div>
 
-        <button onclick="generateAll()" id="generateBtn" class="mt-5 w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded transition">
+        <button onclick="generateAll()" id="generateBtn" class="mt-5 w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded transition flex justify-center items-center gap-2">
             Generate TOS & Test Questions
         </button>
-        <p id="status" class="mt-2 text-center text-sm"></p>
+        <p id="status" class="mt-3 text-center text-sm font-medium h-5"></p>
     </div>
 
     <div id="output" class="hidden">
@@ -268,16 +268,11 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             if (!supabase) return;
             if (creditSubscription) supabase.removeChannel(creditSubscription);
 
-            // Refined Sync Listener to continuously monitor and update cross-tab limits safely
             creditSubscription = supabase
                 .channel('schema-db-changes')
                 .on(
                     'postgres_changes',
-                    {
-                        event: 'UPDATE',
-                        schema: 'public',
-                        table: 'users'
-                    },
+                    { event: 'UPDATE', schema: 'public', table: 'users' },
                     (payload) => {
                         if (payload.new && payload.new.email === currentUserEmail) {
                             currentUserCredits = payload.new.credits;
@@ -324,43 +319,30 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             
             try {
                 const { data, error } = await supabase.functions.invoke('create-payment-link', {
-                    body: { 
-                        email: currentUserEmail,
-                        amount: 10000, 
-                        description: '10 Export Credits for DepEd Assessment Generator'
-                    }
+                    body: { email: currentUserEmail, amount: 10000, description: '10 Export Credits' }
                 });
 
                 if (error) throw new Error("Failed to invoke edge function");
                 
                 if (data && data.checkout_url) {
                     window.open(data.checkout_url, '_blank');
-                    alert("A payment window has opened. Credits will be automatically added to your account upon successful payment.");
+                    alert("A payment window has opened. Credits will be added automatically.");
                 } else {
-                    alert("Failed to generate payment link. Please check your backend logs.");
+                    alert("Failed to generate payment link.");
                 }
             } catch (err) {
                 console.error("Payment generation error:", err);
-                alert("Payment gateway error. Ensure your Edge Function 'create-payment-link' is deployed correctly.");
+                alert("Payment gateway error. Check deployment settings.");
             }
         }
 
         async function consumeCreditAndExport(type) {
-            if (!currentUserEmail) {
-                alert("⚠️ You must sign in with Google to export documents.");
-                return;
-            }
-            if (currentUserCredits <= 0) {
-                alert("❌ Insufficient credits. Please buy more credits to export.");
-                return;
-            }
+            if (!currentUserEmail) return alert("⚠️ You must sign in with Google to export documents.");
+            if (currentUserCredits <= 0) return alert("❌ Insufficient credits. Please buy more credits to export.");
 
             try {
-                if (type === 'pdf') {
-                    exportPDF();
-                } else if (type === 'word') {
-                    exportWord();
-                }
+                if (type === 'pdf') exportPDF();
+                else if (type === 'word') exportWord();
 
                 currentUserCredits -= 1;
                 updateAuthUI();
@@ -372,7 +354,6 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                         .eq('email', currentUserEmail);
                     if (error) throw error;
                 }
-                
             } catch (err) {
                 console.error("Failed to deduct credit:", err);
                 alert("Export succeeded, but there was an error updating your credit balance.");
@@ -394,23 +375,39 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
         const COGNITIVE_ORDER = ["remembering", "understanding", "applying", "analyzing", "evaluating", "creating"];
 
         async function callMistral(prompt) {
-            const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${MISTRAL_API_KEY}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    model: "mistral-small-latest",
-                    response_format: { type: "json_object" },
-                    temperature: 0.4,
-                    max_tokens: 800,
-                    messages: [{ role: "user", content: prompt }]
-                })
-            });
-            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-            const data = await response.json();
-            return JSON.parse(data.choices[0].message.content.trim());
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout safeguard
+
+            try {
+                const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${MISTRAL_API_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: "mistral-small-latest",
+                        response_format: { type: "json_object" },
+                        temperature: 0.4,
+                        max_tokens: 800,
+                        messages: [{ role: "user", content: prompt }]
+                    }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                
+                const data = await response.json();
+                let rawContent = data.choices[0].message.content.trim();
+                
+                // Safety net: aggressively strip markdown formatting if the AI ignores formatting instructions
+                rawContent = rawContent.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+                return JSON.parse(rawContent);
+            } catch (error) {
+                clearTimeout(timeoutId);
+                throw error;
+            }
         }
 
         async function generateAIQuestion(competencyDesc, domain, subject, grade, outputLang) {
@@ -445,7 +442,8 @@ Return ONLY a valid JSON object matching this structure:
             try {
                 return await callMistral(prompt);
             } catch (err) {
-                console.warn("Mistral Fallback used due to error", err);
+                console.warn("Mistral Fallback used due to network/parsing error", err);
+                // Safe Fallback ensures the generation loop never permanently halts
                 return {
                     question: outputLang === "Tagalog" ? `Suriin ang kaisipan na may kaugnayan sa: ${competencyDesc}. Ano ang angkop na kahulugan nito?` : `Analyze the context regarding: ${competencyDesc}. What is its correct execution?`,
                     options: outputLang === "Tagalog" ? ["A. Maling pagpipilian A", "B. Tamang sagot sa pagsusuri", "C. Maling pagpipilian C", "D. Maling pagpipilian D"] : ["A. Distractor Option One", "B. Correct Evaluation Option", "C. Distractor Option Two", "D. Distractor Option Three"],
@@ -480,9 +478,7 @@ Return ONLY a valid JSON object matching this structure:
                     }
                 }
 
-                if (!originalCorrectText || !rawOptions.includes(originalCorrectText)) {
-                    originalCorrectText = rawOptions[0];
-                }
+                if (!originalCorrectText || !rawOptions.includes(originalCorrectText)) originalCorrectText = rawOptions[0];
 
                 for (let i = rawOptions.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -493,11 +489,7 @@ Return ONLY a valid JSON object matching this structure:
                 q.options = rawOptions.map((text, idx) => `${labels[idx]}. ${text}`);
 
                 let newIdx = rawOptions.indexOf(originalCorrectText);
-                if (newIdx !== -1) {
-                    q.correct = q.options[newIdx];
-                } else {
-                    q.correct = q.options[0];
-                }
+                q.correct = newIdx !== -1 ? q.options[newIdx] : q.options[0];
 
                 return q;
             } catch (e) {
@@ -513,7 +505,6 @@ Return ONLY a valid JSON object matching this structure:
                 dist[key] = Math.round(total * (val.percent / 100));
                 sum += dist[key];
             }
-            // Safeguard against infinite loops and adjust sums correctly
             let fuse = 0;
             while (sum !== total && fuse < 100) {
                 if (sum < total) dist.remembering++;
@@ -528,8 +519,7 @@ Return ONLY a valid JSON object matching this structure:
             const btn = document.getElementById("generateBtn");
             const status = document.getElementById("status");
             btn.disabled = true;
-            status.textContent = "Processing pedagogical language matrix... please wait...";
-            status.className = "loading";
+            btn.classList.add("opacity-75", "cursor-not-allowed");
 
             try {
                 const region = document.getElementById("region").value;
@@ -549,9 +539,13 @@ Return ONLY a valid JSON object matching this structure:
                 if (!rawCompetencies || !rawCompetencies.trim()) {
                     alert("Please type or paste at least one competency description line.");
                     btn.disabled = false;
+                    btn.classList.remove("opacity-75", "cursor-not-allowed");
                     status.textContent = "";
                     return;
                 }
+
+                status.textContent = "Analyzing competencies and building matrix framework...";
+                status.className = "loading mt-3 text-center text-sm font-medium h-5";
 
                 const competencies = rawCompetencies
                     .trim()
@@ -573,18 +567,18 @@ Return ONLY a valid JSON object matching this structure:
 
                 for (let i = 0; i < compCount; i++) {
                     const itemsForComp = perComp + (i < remainder ? 1 : 0);
-                    const percent = ((itemsForComp / total) * 100).toFixed(1);
+                    const percent = itemsForComp > 0 ? ((itemsForComp / total) * 100).toFixed(1) : 0;
                     const start = currentItem;
                     const end = currentItem + itemsForComp - 1;
                     const cogRow = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
 
                     for (let j = 0; j < itemsForComp; j++) {
+                        // Live UI update for User Context
+                        status.textContent = `Generating AI test items: Processing question ${currentItem} of ${total}... please wait.`;
+
                         let selectedDomain;
                         for (const d of COGNITIVE_ORDER) {
-                            if (cogAssigned[d] < cogTotal[d]) {
-                                selectedDomain = d;
-                                break;
-                            }
+                            if (cogAssigned[d] < cogTotal[d]) { selectedDomain = d; break; }
                         }
                         if (!selectedDomain) selectedDomain = "remembering";
 
@@ -592,7 +586,6 @@ Return ONLY a valid JSON object matching this structure:
                         cogRow[selectedDomain]++;
 
                         let q = await generateAIQuestion(competencies[i].desc, selectedDomain, subject, grade, outputLang);
-                        
                         q = randomizeOptions(q);
 
                         q.itemNo = currentItem;
@@ -605,14 +598,14 @@ Return ONLY a valid JSON object matching this structure:
                     tosData.push({
                         no: i + 1,
                         competency: competencies[i].desc,
-                        code: competencies[i].code,
-                        days: competencies[i].days,
                         percent: percent,
                         items: itemsForComp,
-                        range: itemsForComp > 0 ? `${start}-${end}` : "0",
+                        range: itemsForComp > 0 ? (start === end ? `${start}` : `${start}-${end}`) : "0",
                         cog: cogRow
                     });
                 }
+
+                status.textContent = "Finalizing documentation format...";
 
                 document.getElementById("tosRegion").textContent = region;
                 document.getElementById("tosDivision").textContent = division;
@@ -632,12 +625,7 @@ Return ONLY a valid JSON object matching this structure:
                                 <th colspan="6" style="width:32%;">COGNITIVE PROCESS DIMENSIONS</th>
                             </tr>
                             <tr>
-                                <th>Rem</th>
-                                <th>Und</th>
-                                <th>App</th>
-                                <th>Ana</th>
-                                <th>Eva</th>
-                                <th>Cre</th>
+                                <th>Rem</th><th>Und</th><th>App</th><th>Ana</th><th>Eva</th><th>Cre</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -705,16 +693,17 @@ Return ONLY a valid JSON object matching this structure:
                 document.getElementById("output").classList.remove("hidden");
                 window.generatedData = { region, division, school, subject, grade, testType, quarter, sy, total, tosData, cogTotal, testItems, answerKeys, outputLang };
                 
-                status.textContent = "✅ Balanced assessment matrix configured!";
-                status.className = "text-green-600 text-center font-bold";
-                btn.disabled = false;
+                status.textContent = "✅ Process Complete: Balanced assessment matrix successfully generated!";
+                status.className = "text-green-600 text-center font-bold mt-3 h-5";
                 
             } catch (error) {
                 console.error("Generation Process Fault:", error);
-                status.textContent = "❌ An error interrupted the generation process. Check your inputs and try again.";
-                status.className = "text-red-600 text-center font-bold mt-2";
-                btn.disabled = false;
+                status.textContent = "❌ Process Error. Click generate again to re-attempt.";
+                status.className = "text-red-600 text-center font-bold mt-3 h-5";
                 alert("Generation halted unexpectedly: " + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove("opacity-75", "cursor-not-allowed");
             }
         }
 
@@ -731,11 +720,7 @@ Return ONLY a valid JSON object matching this structure:
 
             const sanitizeText = (text) => {
                 if (!text) return "";
-                return text
-                    .replace(/[\u200B-\u200D\uFEFF]/g, "") 
-                    .replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u0400-\u04FF]/g, " ") 
-                    .replace(/\s+/g, " ")
-                    .trim();
+                return text.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/[^\x20-\x7E\u00A0-\u00FF\u0100-\u017F\u0400-\u04FF]/g, " ").replace(/\s+/g, " ").trim();
             };
 
             doc.setFontSize(10);
@@ -761,26 +746,16 @@ Return ONLY a valid JSON object matching this structure:
                 startY: y,
                 head: [["No.", "Learning Competency Description", "%", "Items", "Range", "Rem", "Und", "App", "Ana", "Eva", "Cre"]],
                 body: d.tosData.map(r => [
-                    r.no, 
-                    sanitizeText(r.competency), 
-                    `${r.percent}%`, 
-                    r.items, 
-                    r.range,
-                    r.cog.remembering || "", 
-                    r.cog.understanding || "", 
-                    r.cog.applying || "",
-                    r.cog.analyzing || "", 
-                    r.cog.evaluating || "", 
-                    r.cog.creating || ""
+                    r.no, sanitizeText(r.competency), `${r.percent}%`, r.items, r.range,
+                    r.cog.remembering || "", r.cog.understanding || "", r.cog.applying || "",
+                    r.cog.analyzing || "", r.cog.evaluating || "", r.cog.creating || ""
                 ]),
                 foot: [["Total", "", "100%", d.total, `1-${d.total}`, d.cogTotal.remembering, d.cogTotal.understanding, d.cogTotal.applying, d.cogTotal.analyzing, d.cogTotal.evaluating, d.cogTotal.creating]],
                 theme: "grid",
                 styles: { fontSize: 8, cellPadding: 2, textColor: "#111111", font: "helvetica" },
                 headStyles: { fillColor: "#f3f4f6", textColor: "#111111", fontStyle: "bold" },
                 footStyles: { fillColor: "#16a34a", textColor: "#ffffff", fontStyle: "bold" },
-                columnStyles: {
-                    1: { cellWidth: 65 } 
-                }
+                columnStyles: { 1: { cellWidth: 65 } }
             });
 
             doc.addPage();
@@ -792,18 +767,14 @@ Return ONLY a valid JSON object matching this structure:
 
             d.testItems.forEach(q => {
                 doc.setFont("helvetica", "bold");
-                const stem = `${q.itemNo}. ${sanitizeText(q.question)}`;
-                const stemLines = doc.splitTextToSize(stem, 180);
-                
+                const stemLines = doc.splitTextToSize(`${q.itemNo}. ${sanitizeText(q.question)}`, 180);
                 if (y + (stemLines.length * 5) > 275) { doc.addPage(); y = 20; }
                 doc.text(stemLines, 15, y);
                 y += (stemLines.length * 5) + 2;
 
                 doc.setFont("helvetica", "normal");
                 q.options.forEach(opt => {
-                    const cleanOpt = sanitizeText(opt);
-                    const optLines = doc.splitTextToSize(cleanOpt, 170);
-                    
+                    const optLines = doc.splitTextToSize(sanitizeText(opt), 170);
                     if (y + (optLines.length * 5) > 275) { doc.addPage(); y = 20; }
                     doc.text(optLines, 22, y);
                     y += (optLines.length * 5) + 1;
@@ -866,66 +837,23 @@ Return ONLY a valid JSON object matching this structure:
             `).join("");
 
             const wordContent = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:w="urn:schemas-microsoft-com:office:word"
-      xmlns="http://www.w3.org/TR/REC-html40">
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="[http://www.w3.org/TR/REC-html40](http://www.w3.org/TR/REC-html40)">
 <head>
 <meta charset="UTF-8">
 <title>DepEd Assessment & TOS Matrix</title>
 <style>
-@page Section1 {
-    size: 210mm 297mm; 
-    margin: 20mm 20mm 20mm 20mm;
-    mso-page-orientation: portrait;
-}
-div.Section1 {
-    page: Section1;
-}
-body {
-    font-family: 'Arial', sans-serif;
-    font-size: 12pt; 
-    line-height: 1.25;
-    color: #000000;
-}
-p, div, h1, h2, h3, td, th {
-    font-size: 12pt !important; 
-}
-.header-container {
-    text-align: center;
-    margin-bottom: 18pt;
-}
-.header-container p {
-    margin: 0 0 2pt 0;
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 12pt 0;
-}
-table, th, td {
-    border: 1px solid #000000;
-}
-th, td {
-    padding: 5pt;
-    vertical-align: top;
-}
-th {
-    background-color: #f2f2f2;
-    font-weight: bold;
-    text-align: center;
-}
-.total-row td {
-    background-color: #e2e2e2;
-    font-weight: bold;
-}
-.section-break-title {
-    font-size: 14pt !important;
-    font-weight: bold;
-    text-align: center;
-    margin: 24pt 0 12pt 0;
-    border-bottom: 1px solid #000000;
-    padding-bottom: 3pt;
-}
+@page Section1 { size: 210mm 297mm; margin: 20mm 20mm 20mm 20mm; mso-page-orientation: portrait; }
+div.Section1 { page: Section1; }
+body { font-family: 'Arial', sans-serif; font-size: 12pt; line-height: 1.25; color: #000000; }
+p, div, h1, h2, h3, td, th { font-size: 12pt !important; }
+.header-container { text-align: center; margin-bottom: 18pt; }
+.header-container p { margin: 0 0 2pt 0; }
+table { width: 100%; border-collapse: collapse; margin: 12pt 0; }
+table, th, td { border: 1px solid #000000; }
+th, td { padding: 5pt; vertical-align: top; }
+th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+.total-row td { background-color: #e2e2e2; font-weight: bold; }
+.section-break-title { font-size: 14pt !important; font-weight: bold; text-align: center; margin: 24pt 0 12pt 0; border-bottom: 1px solid #000000; padding-bottom: 3pt; }
 </style>
 </head>
 <body>
@@ -941,7 +869,6 @@ th {
             <p>${d.quarter} ${d.testType} (${d.sy || "S.Y. ____-____"})</p>
         </div>
     </div>
-
     <div class="section-break-title">TABLE OF SPECIFICATIONS</div>
     <table>
         <thead>
@@ -953,14 +880,7 @@ th {
                 <th rowspan="2" style="width:12%;">Range</th>
                 <th colspan="6" style="width:25%;">Cognitive Domains</th>
             </tr>
-            <tr>
-                <th>Rem</th>
-                <th>Und</th>
-                <th>App</th>
-                <th>Ana</th>
-                <th>Eva</th>
-                <th>Cre</th>
-            </tr>
+            <tr><th>Rem</th><th>Und</th><th>App</th><th>Ana</th><th>Eva</th><th>Cre</th></tr>
         </thead>
         <tbody>
             ${tosRowsHtml}
@@ -978,28 +898,19 @@ th {
             </tr>
         </tbody>
     </table>
-
     <br clear="all" style="page-break-before:always" />
-    
     <div class="section-break-title">TEST QUESTIONS</div>
     <p style="margin-bottom:12pt; font-style:italic;">
         ${d.outputLang === "Tagalog" ? "Panuto: Basahing mabuti ang bawat tanong at piliin ang pinakatamang sagot." : "Directions: Read each item carefully and choose the best answer."}
     </p>
     ${questionsHtml}
-
     <br clear="all" style="page-break-before:always" />
-    
     <div class="section-break-title">ANSWER KEY</div>
     <table style="width:50%; margin:0 auto;">
         <thead>
-            <tr>
-                <th style="width:40%;">Item No.</th>
-                <th style="width:60%;">Correct Answer Key</th>
-            </tr>
+            <tr><th style="width:40%;">Item No.</th><th style="width:60%;">Correct Answer Key</th></tr>
         </thead>
-        <tbody>
-            ${keyRowsHtml}
-        </tbody>
+        <tbody>${keyRowsHtml}</tbody>
     </table>
 </div>
 </body>
