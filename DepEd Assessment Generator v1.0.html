@@ -44,11 +44,17 @@
 <body class="bg-gray-50 max-w-7xl mx-auto p-4 md:p-6 relative">
 
     <!-- Auth & Credits Header Section -->
-    <div class="flex justify-end items-center mb-4 gap-4 h-10">
+    <div class="flex justify-end items-center mb-4 gap-3 h-10">
+        <!-- Global Synced Credit Counter -->
+        <div id="global-credit-counter" class="hidden flex items-center gap-2 bg-blue-50 px-4 py-1.5 rounded-full shadow-sm border border-blue-200">
+            <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <span class="text-sm font-bold text-gray-700">Credits: <span id="global-credit-count" class="text-blue-700 text-base">0</span></span>
+        </div>
+
         <div id="google-btn"></div>
+        
         <div id="user-dashboard" class="hidden flex items-center gap-3 bg-white p-2 px-4 rounded-full shadow-sm border border-gray-200">
-            <span id="user-email" class="text-sm font-medium text-gray-600"></span>
-            <span class="text-sm font-bold bg-blue-100 text-blue-800 px-3 py-1 rounded-full">Credits: <span id="credit-count">0</span></span>
+            <span id="user-email" class="text-sm font-medium text-gray-600 hidden md:inline"></span>
             <button onclick="buyCredits()" class="text-sm bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-full transition">Buy Credits</button>
             <button onclick="logout()" class="text-sm text-red-500 hover:text-red-700 font-medium ml-2 border-l pl-3">Logout</button>
         </div>
@@ -181,16 +187,22 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
            === CONFIGURATION & CREDENTIALS === 
            ========================================================= */
         const MISTRAL_API_KEY = "GVgRqeTk5bdH4GYa10FRAw7hC3x2vqyF"; 
-        
         const GOOGLE_CLIENT_ID = "234617879687-3crdscg9v65u7d531o6dgf3ma47f6nr2.apps.googleusercontent.com"; 
-        
         const SUPABASE_URL = "https://pxuzrjppausjldkyfpbe.supabase.co"; 
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4dXpyanBwYXVzamxka3lmcGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTUzMDcsImV4cCI6MjA5OTQzMTMwN30.alC3JldmwWoR9x2k1BnjyNuZcaDTk_-V2VtPdFh56sk";
 
         /* =========================================================
            === AUTHENTICATION & CREDIT SYSTEM LOGIC === 
            ========================================================= */
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let supabase = null;
+        try {
+            if (window.supabase) {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.warn("Supabase library not loaded. Ensure you are connected to the internet.");
+        }
+
         let currentUserEmail = null;
         let currentUserCredits = 0;
         let creditSubscription = null;
@@ -221,6 +233,13 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             const payload = decodeJwtResponse(response.credential);
             currentUserEmail = payload.email;
 
+            if (!supabase) {
+                console.warn("Operating offline or database inaccessible. Proceeding with local state.");
+                currentUserCredits = 3;
+                updateAuthUI();
+                return;
+            }
+
             try {
                 const { data, error } = await supabase
                     .from('users')
@@ -238,17 +257,18 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                 }
 
                 updateAuthUI();
-                setupRealtimeCredits(); // Setup real-time listener for cross-tool synchronization
+                setupRealtimeCredits(); 
             } catch (err) {
                 console.error("Database Auth Error:", err);
-                alert("Error connecting to database to fetch credits.");
+                alert("Error connecting to database to fetch credits. Functionality might be limited.");
             }
         }
 
         function setupRealtimeCredits() {
+            if (!supabase) return;
             if (creditSubscription) supabase.removeChannel(creditSubscription);
 
-            // Keeps credits synchronized across different dashboard tools instantly
+            // Refined Sync Listener to continuously monitor and update cross-tab limits safely
             creditSubscription = supabase
                 .channel('schema-db-changes')
                 .on(
@@ -256,12 +276,13 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                     {
                         event: 'UPDATE',
                         schema: 'public',
-                        table: 'users',
-                        filter: `email=eq.${currentUserEmail}`
+                        table: 'users'
                     },
                     (payload) => {
-                        currentUserCredits = payload.new.credits;
-                        document.getElementById('credit-count').textContent = currentUserCredits;
+                        if (payload.new && payload.new.email === currentUserEmail) {
+                            currentUserCredits = payload.new.credits;
+                            document.getElementById('global-credit-count').textContent = currentUserCredits;
+                        }
                     }
                 )
                 .subscribe();
@@ -271,11 +292,16 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             if (currentUserEmail) {
                 document.getElementById('google-btn').classList.add('hidden');
                 document.getElementById('user-dashboard').classList.remove('hidden');
+                document.getElementById('global-credit-counter').classList.remove('hidden');
+                document.getElementById('global-credit-counter').classList.add('flex');
+                
                 document.getElementById('user-email').textContent = currentUserEmail;
-                document.getElementById('credit-count').textContent = currentUserCredits;
+                document.getElementById('global-credit-count').textContent = currentUserCredits;
             } else {
                 document.getElementById('google-btn').classList.remove('hidden');
                 document.getElementById('user-dashboard').classList.add('hidden');
+                document.getElementById('global-credit-counter').classList.add('hidden');
+                document.getElementById('global-credit-counter').classList.remove('flex');
             }
         }
 
@@ -283,7 +309,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
             currentUserEmail = null;
             currentUserCredits = 0;
             updateAuthUI();
-            if (creditSubscription) {
+            if (creditSubscription && supabase) {
                 supabase.removeChannel(creditSubscription);
                 creditSubscription = null;
             }
@@ -294,6 +320,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
 
         async function buyCredits() {
             if (!currentUserEmail) return alert("Please sign in first.");
+            if (!supabase) return alert("Database is currently unreachable.");
             
             try {
                 const { data, error } = await supabase.functions.invoke('create-payment-link', {
@@ -304,9 +331,7 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                     }
                 });
 
-                if (error) {
-                    throw new Error("Failed to invoke edge function");
-                }
+                if (error) throw new Error("Failed to invoke edge function");
                 
                 if (data && data.checkout_url) {
                     window.open(data.checkout_url, '_blank');
@@ -340,12 +365,13 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                 currentUserCredits -= 1;
                 updateAuthUI();
 
-                const { error } = await supabase
-                    .from('users')
-                    .update({ credits: currentUserCredits })
-                    .eq('email', currentUserEmail);
-
-                if (error) throw error;
+                if (supabase) {
+                    const { error } = await supabase
+                        .from('users')
+                        .update({ credits: currentUserCredits })
+                        .eq('email', currentUserEmail);
+                    if (error) throw error;
+                }
                 
             } catch (err) {
                 console.error("Failed to deduct credit:", err);
@@ -418,7 +444,8 @@ Return ONLY a valid JSON object matching this structure:
 
             try {
                 return await callMistral(prompt);
-            } catch {
+            } catch (err) {
+                console.warn("Mistral Fallback used due to error", err);
                 return {
                     question: outputLang === "Tagalog" ? `Suriin ang kaisipan na may kaugnayan sa: ${competencyDesc}. Ano ang angkop na kahulugan nito?` : `Analyze the context regarding: ${competencyDesc}. What is its correct execution?`,
                     options: outputLang === "Tagalog" ? ["A. Maling pagpipilian A", "B. Tamang sagot sa pagsusuri", "C. Maling pagpipilian C", "D. Maling pagpipilian D"] : ["A. Distractor Option One", "B. Correct Evaluation Option", "C. Distractor Option Two", "D. Distractor Option Three"],
@@ -428,50 +455,55 @@ Return ONLY a valid JSON object matching this structure:
         }
 
         function randomizeOptions(q) {
-            if (!q || !Array.isArray(q.options) || q.options.length === 0) return q;
+            try {
+                if (!q || !Array.isArray(q.options) || q.options.length === 0) return q;
 
-            let rawOptions = q.options.map(opt => opt.replace(/^[A-D]\.\s*/i, "").trim());
-            let originalCorrectText = "";
+                let rawOptions = q.options.map(opt => opt.replace(/^[A-D]\.\s*/i, "").trim());
+                let originalCorrectText = "";
 
-            if (q.correct) {
-                let trimmedCorrect = q.correct.trim();
-                let idx = q.options.findIndex(o => o.trim() === trimmedCorrect);
-                if (idx !== -1) {
-                    originalCorrectText = rawOptions[idx];
-                } else {
-                    let cleanCorrect = trimmedCorrect.replace(/^[A-D]\.\s*/i, "").trim();
-                    let cleanIdx = rawOptions.indexOf(cleanCorrect);
-                    if (cleanIdx !== -1) {
-                        originalCorrectText = rawOptions[cleanIdx];
-                    } else if (["A", "B", "C", "D"].includes(trimmedCorrect.toUpperCase())) {
-                        let labelIdx = ["A", "B", "C", "D"].indexOf(trimmedCorrect.toUpperCase());
-                        if (rawOptions[labelIdx]) originalCorrectText = rawOptions[labelIdx];
+                if (q.correct) {
+                    let trimmedCorrect = q.correct.trim();
+                    let idx = q.options.findIndex(o => o.trim() === trimmedCorrect);
+                    if (idx !== -1) {
+                        originalCorrectText = rawOptions[idx];
                     } else {
-                        originalCorrectText = cleanCorrect;
+                        let cleanCorrect = trimmedCorrect.replace(/^[A-D]\.\s*/i, "").trim();
+                        let cleanIdx = rawOptions.indexOf(cleanCorrect);
+                        if (cleanIdx !== -1) {
+                            originalCorrectText = rawOptions[cleanIdx];
+                        } else if (["A", "B", "C", "D"].includes(trimmedCorrect.toUpperCase())) {
+                            let labelIdx = ["A", "B", "C", "D"].indexOf(trimmedCorrect.toUpperCase());
+                            if (rawOptions[labelIdx]) originalCorrectText = rawOptions[labelIdx];
+                        } else {
+                            originalCorrectText = cleanCorrect;
+                        }
                     }
                 }
+
+                if (!originalCorrectText || !rawOptions.includes(originalCorrectText)) {
+                    originalCorrectText = rawOptions[0];
+                }
+
+                for (let i = rawOptions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [rawOptions[i], rawOptions[j]] = [rawOptions[j], rawOptions[i]];
+                }
+
+                const labels = ["A", "B", "C", "D"];
+                q.options = rawOptions.map((text, idx) => `${labels[idx]}. ${text}`);
+
+                let newIdx = rawOptions.indexOf(originalCorrectText);
+                if (newIdx !== -1) {
+                    q.correct = q.options[newIdx];
+                } else {
+                    q.correct = q.options[0];
+                }
+
+                return q;
+            } catch (e) {
+                console.error("Option Randomizer Exception:", e);
+                return q;
             }
-
-            if (!originalCorrectText || !rawOptions.includes(originalCorrectText)) {
-                originalCorrectText = rawOptions[0];
-            }
-
-            for (let i = rawOptions.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [rawOptions[i], rawOptions[j]] = [rawOptions[j], rawOptions[i]];
-            }
-
-            const labels = ["A", "B", "C", "D"];
-            q.options = rawOptions.map((text, idx) => `${labels[idx]}. ${text}`);
-
-            let newIdx = rawOptions.indexOf(originalCorrectText);
-            if (newIdx !== -1) {
-                q.correct = q.options[newIdx];
-            } else {
-                q.correct = q.options[0];
-            }
-
-            return q;
         }
 
         function getCognitiveTotal(total) {
@@ -481,10 +513,13 @@ Return ONLY a valid JSON object matching this structure:
                 dist[key] = Math.round(total * (val.percent / 100));
                 sum += dist[key];
             }
-            while (sum !== total) {
+            // Safeguard against infinite loops and adjust sums correctly
+            let fuse = 0;
+            while (sum !== total && fuse < 100) {
                 if (sum < total) dist.remembering++;
                 else dist.understanding--;
                 sum = Object.values(dist).reduce((a, b) => a + b, 0);
+                fuse++;
             }
             return dist;
         }
@@ -496,181 +531,191 @@ Return ONLY a valid JSON object matching this structure:
             status.textContent = "Processing pedagogical language matrix... please wait...";
             status.className = "loading";
 
-            const region = document.getElementById("region").value;
-            const division = document.getElementById("division").value;
-            const school = document.getElementById("school").value;
-            const subject = document.getElementById("subject").value;
-            const grade = document.getElementById("grade").value;
-            const testType = document.getElementById("testType").value;
-            const quarter = document.getElementById("quarter").value;
-            const sy = document.getElementById("sy").value;
-            const total = parseInt(document.getElementById("totalItems").value);
+            try {
+                const region = document.getElementById("region").value;
+                const division = document.getElementById("division").value;
+                const school = document.getElementById("school").value;
+                const subject = document.getElementById("subject").value || "";
+                const grade = document.getElementById("grade").value;
+                const testType = document.getElementById("testType").value;
+                const quarter = document.getElementById("quarter").value;
+                const sy = document.getElementById("sy").value;
+                const total = parseInt(document.getElementById("totalItems").value);
 
-            // Determine language based on substring matching to accommodate free text input
-            const tagalogSubjects = ["Filipino", "Makabansa", "GMRC", "Araling Panlipunan", "Komunikasyon", "ESP"];
-            const outputLang = tagalogSubjects.some(ts => subject.toLowerCase().includes(ts.toLowerCase())) ? "Tagalog" : "English";
+                const tagalogSubjects = ["Filipino", "Makabansa", "GMRC", "Araling Panlipunan", "Komunikasyon", "ESP"];
+                const outputLang = tagalogSubjects.some(ts => subject.toLowerCase().includes(ts.toLowerCase())) ? "Tagalog" : "English";
 
-            const competencies = document.getElementById("competencies").value
-                .trim()
-                .split("\n")
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .map(desc => ({ desc: desc, code: "N/A", days: "N/A" }));
-
-            if (competencies.length < 1) {
-                alert("Please type or paste at least one competency description line.");
-                btn.disabled = false;
-                status.textContent = "";
-                return;
-            }
-
-            const compCount = competencies.length;
-            const cogTotal = getCognitiveTotal(total);
-            const perComp = Math.floor(total / compCount);
-            const remainder = total % compCount;
-
-            const tosData = [];
-            const testItems = [];
-            const answerKeys = [];
-            let currentItem = 1;
-            let cogAssigned = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
-
-            for (let i = 0; i < compCount; i++) {
-                const itemsForComp = perComp + (i < remainder ? 1 : 0);
-                const percent = ((itemsForComp / total) * 100).toFixed(1);
-                const start = currentItem;
-                const end = currentItem + itemsForComp - 1;
-                const cogRow = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
-
-                for (let j = 0; j < itemsForComp; j++) {
-                    let selectedDomain;
-                    for (const d of COGNITIVE_ORDER) {
-                        if (cogAssigned[d] < cogTotal[d]) {
-                            selectedDomain = d;
-                            break;
-                        }
-                    }
-                    if (!selectedDomain) selectedDomain = "remembering";
-
-                    cogAssigned[selectedDomain]++;
-                    cogRow[selectedDomain]++;
-
-                    let q = await generateAIQuestion(competencies[i].desc, selectedDomain, subject, grade, outputLang);
-                    
-                    q = randomizeOptions(q);
-
-                    q.itemNo = currentItem;
-                    q.domain = selectedDomain;
-                    testItems.push(q);
-                    answerKeys.push({ no: currentItem, ans: q.correct });
-                    currentItem++;
+                const rawCompetencies = document.getElementById("competencies").value;
+                if (!rawCompetencies || !rawCompetencies.trim()) {
+                    alert("Please type or paste at least one competency description line.");
+                    btn.disabled = false;
+                    status.textContent = "";
+                    return;
                 }
 
-                tosData.push({
-                    no: i + 1,
-                    competency: competencies[i].desc,
-                    code: competencies[i].code,
-                    days: competencies[i].days,
-                    percent: percent,
-                    items: itemsForComp,
-                    range: itemsForComp > 0 ? `${start}-${end}` : "0",
-                    cog: cogRow
-                });
-            }
+                const competencies = rawCompetencies
+                    .trim()
+                    .split("\n")
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .map(desc => ({ desc: desc, code: "N/A", days: "N/A" }));
 
-            document.getElementById("tosRegion").textContent = region;
-            document.getElementById("tosDivision").textContent = division;
-            document.getElementById("tosSchool").textContent = school;
-            document.getElementById("tosTitle").textContent = `${subject} - ${grade} (${quarter} ${testType})`;
-            document.getElementById("tosSY").textContent = sy;
+                const compCount = competencies.length;
+                const cogTotal = getCognitiveTotal(total);
+                const perComp = Math.floor(total / compCount);
+                const remainder = total % compCount;
 
-            document.getElementById("tosContent").innerHTML = `
-                <table class="tos-table">
-                    <thead>
-                        <tr>
-                            <th rowspan="2" style="width:5%;">No.</th>
-                            <th rowspan="2" style="width:35%;">Learning Competency Description</th>
-                            <th rowspan="2" style="width:10%;">Percentage</th>
-                            <th rowspan="2" style="width:8%;">No. of Items</th>
-                            <th rowspan="2" style="width:10%;">Item Range</th>
-                            <th colspan="6" style="width:32%;">COGNITIVE PROCESS DIMENSIONS</th>
-                        </tr>
-                        <tr>
-                            <th>Rem</th>
-                            <th>Und</th>
-                            <th>App</th>
-                            <th>Ana</th>
-                            <th>Eva</th>
-                            <th>Cre</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tosData.map(r => `
+                const tosData = [];
+                const testItems = [];
+                const answerKeys = [];
+                let currentItem = 1;
+                let cogAssigned = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
+
+                for (let i = 0; i < compCount; i++) {
+                    const itemsForComp = perComp + (i < remainder ? 1 : 0);
+                    const percent = ((itemsForComp / total) * 100).toFixed(1);
+                    const start = currentItem;
+                    const end = currentItem + itemsForComp - 1;
+                    const cogRow = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
+
+                    for (let j = 0; j < itemsForComp; j++) {
+                        let selectedDomain;
+                        for (const d of COGNITIVE_ORDER) {
+                            if (cogAssigned[d] < cogTotal[d]) {
+                                selectedDomain = d;
+                                break;
+                            }
+                        }
+                        if (!selectedDomain) selectedDomain = "remembering";
+
+                        cogAssigned[selectedDomain]++;
+                        cogRow[selectedDomain]++;
+
+                        let q = await generateAIQuestion(competencies[i].desc, selectedDomain, subject, grade, outputLang);
+                        
+                        q = randomizeOptions(q);
+
+                        q.itemNo = currentItem;
+                        q.domain = selectedDomain;
+                        testItems.push(q);
+                        answerKeys.push({ no: currentItem, ans: q.correct });
+                        currentItem++;
+                    }
+
+                    tosData.push({
+                        no: i + 1,
+                        competency: competencies[i].desc,
+                        code: competencies[i].code,
+                        days: competencies[i].days,
+                        percent: percent,
+                        items: itemsForComp,
+                        range: itemsForComp > 0 ? `${start}-${end}` : "0",
+                        cog: cogRow
+                    });
+                }
+
+                document.getElementById("tosRegion").textContent = region;
+                document.getElementById("tosDivision").textContent = division;
+                document.getElementById("tosSchool").textContent = school;
+                document.getElementById("tosTitle").textContent = `${subject} - ${grade} (${quarter} ${testType})`;
+                document.getElementById("tosSY").textContent = sy;
+
+                document.getElementById("tosContent").innerHTML = `
+                    <table class="tos-table">
+                        <thead>
                             <tr>
-                                <td class="text-center font-medium">${r.no}</td>
-                                <td>${r.competency}</td>
-                                <td class="text-center">${r.percent}%</td>
-                                <td class="text-center font-semibold">${r.items}</td>
-                                <td class="text-center">${r.range}</td>
-                                <td class="text-center text-gray-600">${r.cog.remembering || ""}</td>
-                                <td class="text-center text-gray-600">${r.cog.understanding || ""}</td>
-                                <td class="text-center text-gray-600">${r.cog.applying || ""}</td>
-                                <td class="text-center text-gray-600">${r.cog.analyzing || ""}</td>
-                                <td class="text-center text-gray-600">${r.cog.evaluating || ""}</td>
-                                <td class="text-center text-gray-600">${r.cog.creating || ""}</td>
+                                <th rowspan="2" style="width:5%;">No.</th>
+                                <th rowspan="2" style="width:35%;">Learning Competency Description</th>
+                                <th rowspan="2" style="width:10%;">Percentage</th>
+                                <th rowspan="2" style="width:8%;">No. of Items</th>
+                                <th rowspan="2" style="width:10%;">Item Range</th>
+                                <th colspan="6" style="width:32%;">COGNITIVE PROCESS DIMENSIONS</th>
                             </tr>
-                        `).join("")}
-                        <tr class="total-row">
-                            <td colspan="2" class="text-right pr-4">Total</td>
-                            <td class="text-center">100%</td>
-                            <td class="text-center">${total}</td>
-                            <td class="text-center">1-${total}</td>
-                            <td class="text-center">${cogTotal.remembering}</td>
-                            <td class="text-center">${cogTotal.understanding}</td>
-                            <td class="text-center">${cogTotal.applying}</td>
-                            <td class="text-center">${cogTotal.analyzing}</td>
-                            <td class="text-center">${cogTotal.evaluating}</td>
-                            <td class="text-center">${cogTotal.creating}</td>
-                        </tr>
-                    </tbody>
-                </table>`;
+                            <tr>
+                                <th>Rem</th>
+                                <th>Und</th>
+                                <th>App</th>
+                                <th>Ana</th>
+                                <th>Eva</th>
+                                <th>Cre</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tosData.map(r => `
+                                <tr>
+                                    <td class="text-center font-medium">${r.no}</td>
+                                    <td>${r.competency}</td>
+                                    <td class="text-center">${r.percent}%</td>
+                                    <td class="text-center font-semibold">${r.items}</td>
+                                    <td class="text-center">${r.range}</td>
+                                    <td class="text-center text-gray-600">${r.cog.remembering || ""}</td>
+                                    <td class="text-center text-gray-600">${r.cog.understanding || ""}</td>
+                                    <td class="text-center text-gray-600">${r.cog.applying || ""}</td>
+                                    <td class="text-center text-gray-600">${r.cog.analyzing || ""}</td>
+                                    <td class="text-center text-gray-600">${r.cog.evaluating || ""}</td>
+                                    <td class="text-center text-gray-600">${r.cog.creating || ""}</td>
+                                </tr>
+                            `).join("")}
+                            <tr class="total-row">
+                                <td colspan="2" class="text-right pr-4">Total</td>
+                                <td class="text-center">100%</td>
+                                <td class="text-center">${total}</td>
+                                <td class="text-center">1-${total}</td>
+                                <td class="text-center">${cogTotal.remembering}</td>
+                                <td class="text-center">${cogTotal.understanding}</td>
+                                <td class="text-center">${cogTotal.applying}</td>
+                                <td class="text-center">${cogTotal.analyzing}</td>
+                                <td class="text-center">${cogTotal.evaluating}</td>
+                                <td class="text-center">${cogTotal.creating}</td>
+                            </tr>
+                        </tbody>
+                    </table>`;
 
-            document.getElementById("testContent").innerHTML = `
-                <p class="mb-4 text-gray-700 font-medium italic">${outputLang === "Tagalog" ? "Panuto: Basahing mabuti ang bawat tanong at piliin ang pinakatamang sagot." : "Directions: Read each item carefully and choose the best answer."}</p>
-                <div class="space-y-4">
-                    ${testItems.map(q => `
-                        <div class="p-2 rounded hover:bg-gray-50">
-                            <p class="mb-1 text-gray-900"><strong>${q.itemNo}.</strong> ${q.question} <span class="text-xs text-blue-500 font-mono font-normal">(${q.domain})</span></p>
-                            <div class="ml-6 space-y-0.5 text-gray-700">
-                                ${q.options.map(o => `<p>${o}</p>`).join("")}
+                document.getElementById("testContent").innerHTML = `
+                    <p class="mb-4 text-gray-700 font-medium italic">${outputLang === "Tagalog" ? "Panuto: Basahing mabuti ang bawat tanong at piliin ang pinakatamang sagot." : "Directions: Read each item carefully and choose the best answer."}</p>
+                    <div class="space-y-4">
+                        ${testItems.map(q => `
+                            <div class="p-2 rounded hover:bg-gray-50">
+                                <p class="mb-1 text-gray-900"><strong>${q.itemNo}.</strong> ${q.question} <span class="text-xs text-blue-500 font-mono font-normal">(${q.domain})</span></p>
+                                <div class="ml-6 space-y-0.5 text-gray-700">
+                                    ${q.options.map(o => `<p>${o}</p>`).join("")}
+                                </div>
                             </div>
-                        </div>
-                    `).join("")}
-                </div>`;
-
-            document.getElementById("answerKey").innerHTML = `
-                <table class="key-table max-w-sm">
-                    <thead>
-                        <tr>
-                            <th class="text-center" style="width:40%;">Item No.</th>
-                            <th style="width:60%;">Correct Answer Option Key</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${answerKeys.map(k => `
-                            <tr>
-                                <td class="text-center font-bold text-gray-700">${k.no}</td>
-                                <td class="font-medium text-green-700">${k.ans}</td>
-                            </tr>
                         `).join("")}
-                    </tbody>
-                </table>`;
+                    </div>`;
 
-            document.getElementById("output").classList.remove("hidden");
-            window.generatedData = { region, division, school, subject, grade, testType, quarter, sy, total, tosData, cogTotal, testItems, answerKeys, outputLang };
-            status.textContent = "✅ Balanced assessment matrix configured!";
-            status.className = "text-green-600 text-center font-bold";
-            btn.disabled = false;
+                document.getElementById("answerKey").innerHTML = `
+                    <table class="key-table max-w-sm">
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width:40%;">Item No.</th>
+                                <th style="width:60%;">Correct Answer Option Key</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${answerKeys.map(k => `
+                                <tr>
+                                    <td class="text-center font-bold text-gray-700">${k.no}</td>
+                                    <td class="font-medium text-green-700">${k.ans}</td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                    </table>`;
+
+                document.getElementById("output").classList.remove("hidden");
+                window.generatedData = { region, division, school, subject, grade, testType, quarter, sy, total, tosData, cogTotal, testItems, answerKeys, outputLang };
+                
+                status.textContent = "✅ Balanced assessment matrix configured!";
+                status.className = "text-green-600 text-center font-bold";
+                btn.disabled = false;
+                
+            } catch (error) {
+                console.error("Generation Process Fault:", error);
+                status.textContent = "❌ An error interrupted the generation process. Check your inputs and try again.";
+                status.className = "text-red-600 text-center font-bold mt-2";
+                btn.disabled = false;
+                alert("Generation halted unexpectedly: " + error.message);
+            }
         }
 
         /* =========================================================
