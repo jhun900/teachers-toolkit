@@ -416,7 +416,12 @@ Classify various materials as solid, liquid, or gas based on attributes."></text
                 const data = await response.json();
                 let rawContent = data.choices[0].message.content.trim();
                 
-                rawContent = rawContent.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+                // FIXED: Extract JSON strictly to prevent SyntaxError caused by AI markdown/conversational text
+                const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    rawContent = jsonMatch[0];
+                }
+                
                 return JSON.parse(rawContent);
             } catch (error) {
                 clearTimeout(timeoutId);
@@ -855,8 +860,9 @@ Return ONLY a valid JSON object matching this structure:
                 </tr>
             `).join("");
 
+            // FIXED: Corrected the erroneous XML Namespace hyperlinking syntax below. 
             const wordContent = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="[http://www.w3.org/TR/REC-html40](http://www.w3.org/TR/REC-html40)">
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="UTF-8">
 <title>DepEd Assessment & TOS Matrix</title>
