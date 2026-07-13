@@ -61,10 +61,13 @@
                 <p class="text-gray-600 mt-1 text-sm">Official ILAW Matrix Layout | Aligned to DO 3, s. 2026</p>
             </div>
             
-            <!-- Credit Display UI -->
+            <!-- Credit Display UI with Top Up Button -->
             <div class="bg-depedLight px-4 py-2 rounded-lg border border-deped/20 flex items-center gap-2">
                 <i class="fa fa-coins text-deped font-bold"></i>
                 <span class="text-sm font-semibold text-depedDark">Credits: <span id="creditDisplay">...</span></span>
+                <button id="headerTopUpBtn" class="ml-3 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded transition-colors shadow-sm font-bold flex items-center gap-1">
+                    <i class="fa fa-plus"></i> Top Up
+                </button>
             </div>
         </header>
 
@@ -183,18 +186,48 @@
         </div>
     </div>
 
-    <!-- Buy Credits Modal -->
+    <!-- Buy Credits Modal (Updated with Tiers) -->
     <div id="buyCreditsModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex justify-center items-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center transform transition-all">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md text-center transform transition-all">
             <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i class="fa fa-credit-card text-blue-500 text-3xl"></i>
+                <i class="fa fa-bolt text-blue-500 text-3xl"></i>
             </div>
-            <h3 class="text-xl font-bold text-gray-800 mb-2">Refill Your Credits</h3>
-            <p class="text-gray-600 text-sm mb-6">Purchase credits via GCash, Maya, or Card to continue generating DepEd ILAW lesson plans.</p>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Select a Top Up Plan</h3>
+            <p class="text-gray-600 text-sm mb-5">Purchase credits via GCash, Maya, or Card to continue generating DepEd ILAW lesson plans.</p>
+            
+            <!-- Tier Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 text-left" id="tierGrid">
+                <div class="tier-card border-2 border-gray-200 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition-colors" data-id="tier_1" data-price="10" data-credits="10">
+                    <div class="font-bold text-gray-800 text-lg">10 <i class="fa fa-coins text-sm text-yellow-500"></i></div>
+                    <div class="text-sm font-semibold text-gray-500">₱10.00</div>
+                </div>
+                <div class="tier-card border-2 border-gray-200 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition-colors" data-id="tier_2" data-price="50" data-credits="50">
+                    <div class="font-bold text-gray-800 text-lg">50 <i class="fa fa-coins text-sm text-yellow-500"></i></div>
+                    <div class="text-sm font-semibold text-gray-500">₱50.00</div>
+                </div>
+                <div class="tier-card border-2 border-gray-200 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition-colors" data-id="tier_3" data-price="100" data-credits="100">
+                    <div class="font-bold text-gray-800 text-lg">100 <i class="fa fa-coins text-sm text-yellow-500"></i></div>
+                    <div class="text-sm font-semibold text-gray-500">₱100.00</div>
+                </div>
+                <div class="tier-card border-2 border-gray-200 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition-colors" data-id="tier_4" data-price="200" data-credits="200">
+                    <div class="font-bold text-gray-800 text-lg">200 <i class="fa fa-coins text-sm text-yellow-500"></i></div>
+                    <div class="text-sm font-semibold text-gray-500">₱200.00</div>
+                </div>
+                <div class="tier-card border-2 border-gray-200 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition-colors" data-id="tier_5" data-price="300" data-credits="300">
+                    <div class="font-bold text-gray-800 text-lg">300 <i class="fa fa-coins text-sm text-yellow-500"></i></div>
+                    <div class="text-sm font-semibold text-gray-500">₱300.00</div>
+                </div>
+                <!-- Default Selected Tier -->
+                <div class="tier-card border-2 border-blue-600 bg-blue-50 rounded-lg p-3 cursor-pointer shadow-sm transition-colors" data-id="tier_6" data-price="500" data-credits="500">
+                    <div class="font-bold text-gray-800 text-lg">500 <i class="fa fa-coins text-sm text-yellow-500"></i></div>
+                    <div class="text-sm font-semibold text-blue-600">₱500.00</div>
+                </div>
+            </div>
+
             <div class="flex gap-3 justify-center">
-                <button id="closeModalBtn" class="btn-secondary !bg-gray-100 !text-gray-700 hover:!bg-gray-200">Cancel</button>
-                <button id="purchaseBtn" class="btn-primary !bg-blue-600 hover:!bg-blue-700 flex items-center gap-2">
-                    <i class="fa fa-shopping-cart"></i> Top Up (₱500)
+                <button id="closeModalBtn" class="btn-secondary !bg-gray-100 !text-gray-700 hover:!bg-gray-200 w-full">Cancel</button>
+                <button id="purchaseBtn" class="btn-primary !bg-blue-600 hover:!bg-blue-700 flex items-center justify-center gap-2 w-full">
+                    <i class="fa fa-shopping-cart"></i> Pay ₱<span id="btnPriceDisplay">500</span>
                 </button>
             </div>
         </div>
@@ -244,8 +277,42 @@
         }
 
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
+        document.getElementById('headerTopUpBtn').addEventListener('click', () => modal.classList.remove('hidden'));
+
+        // --- TIER SELECTION LOGIC ---
+        let selectedTier = { id: 'tier_6', price: 500, credits: 500 }; // Default to highest tier
+        const tierCards = document.querySelectorAll('.tier-card');
+        const btnPriceDisplay = document.getElementById('btnPriceDisplay');
+
+        tierCards.forEach(card => {
+            card.addEventListener('click', () => {
+                // Clear active states
+                tierCards.forEach(c => {
+                    c.classList.remove('border-blue-600', 'bg-blue-50', 'shadow-sm');
+                    c.classList.add('border-gray-200');
+                    c.querySelector('.text-sm').classList.remove('text-blue-600');
+                    c.querySelector('.text-sm').classList.add('text-gray-500');
+                });
+                
+                // Set active state on clicked card
+                card.classList.remove('border-gray-200');
+                card.classList.add('border-blue-600', 'bg-blue-50', 'shadow-sm');
+                card.querySelector('.text-sm').classList.remove('text-gray-500');
+                card.querySelector('.text-sm').classList.add('text-blue-600');
+                
+                // Update variables
+                selectedTier = {
+                    id: card.getAttribute('data-id'),
+                    price: parseInt(card.getAttribute('data-price')),
+                    credits: parseInt(card.getAttribute('data-credits'))
+                };
+                
+                // Update purchase button UI
+                btnPriceDisplay.textContent = selectedTier.price;
+            });
+        });
         
-        // --- UPDATED PAYMENT BUTTON LOGIC START ---
+        // --- UPDATED PAYMENT BUTTON LOGIC WITH TIERS ---
         document.getElementById('purchaseBtn').addEventListener('click', async () => {
             const btn = document.getElementById('purchaseBtn');
             const originalText = btn.innerHTML;
@@ -258,18 +325,18 @@
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}` // <-- FIXED: Added missing authentication
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}` 
                     },
                     body: JSON.stringify({
                         userId: currentUserId,
-                        amount: 50000,          
-                        creditsToAdd: 500,      
-                        description: "500 App Credits"
+                        planId: selectedTier.id,                          // The secure identifier your backend should validate against
+                        amount: selectedTier.price * 100,                 // Multiplied by 100 because PayMongo reads in centavos
+                        creditsToAdd: selectedTier.credits,               
+                        description: `${selectedTier.credits} App Credits`
                     })
                 });
 
                 if (!response.ok) {
-                    // Captures detailed backend messages for seamless troubleshooting
                     const errorDetails = await response.text();
                     throw new Error(`Server returned ${response.status}: ${errorDetails}`);
                 }
@@ -291,7 +358,6 @@
                 btn.disabled = false;
             }
         });
-        // --- UPDATED PAYMENT BUTTON LOGIC END ---
 
         const MISTRAL_API_KEY = "YxzTi7XRyqOtSX1rn2JPSbLd42nzMCKj";
         const MISTRAL_MODEL = "mistral-small-latest";
@@ -441,7 +507,7 @@ Return ONLY a valid JSON object matching this structural schema template exactly
 
                 const data = await response.json();
                 
-                // FIXED: Strip Markdown fences if the AI forgets to output pure JSON
+                // Strip Markdown fences if the AI forgets to output pure JSON
                 let aiContent = data.choices[0].message.content.trim();
                 if (aiContent.startsWith('```')) {
                     aiContent = aiContent.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '');
