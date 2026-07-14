@@ -230,44 +230,20 @@
 
     <script>
         // --- STRICT MULTI-LAYER STORAGE & SUPABASE CREDIT SYSTEM ---
+        // ==========================================
+        // --- START OF CREDIT SYSTEM REPLACEMENT ---
+        // ==========================================
+        
+        // --- STRICT MULTI-LAYER STORAGE & SUPABASE CREDIT SYSTEM ---
         const SUPABASE_URL = 'https://pxuzrjppausjldkyfpbe.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4dXpyanBwYXVzamxka3lmcGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTUzMDcsImV4cCI6MjA5OTQzMTMwN30.alC3JldmwWoR9x2k1BnjyNuZcaDTk_-V2VtPdFh56sk';
         
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        
         const modal = document.getElementById('buyCreditsModal');
         let userCredits = 0;
+        let currentUserId = null;
 
-        // --- DYNAMIC USER ID ASSIGNMENT FIX ---
-        // Dynamically grabs the authenticated user's email from the Dashboard gatekeeper.
-        // If not found, generates a unique fallback ID to prevent Database collision.
-        function getOrCreateUserId() {
-            try {
-                const sessionStr = localStorage.getItem('deped_active_session');
-                if (sessionStr) {
-                    const session = JSON.parse(sessionStr);
-                    if (session.email) return session.email;
-                }
-            } catch(e) {}
-            
-            let storedId = localStorage.getItem('ilaw_user_uuid');
-            if (storedId) return storedId;
-            
-            const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-            localStorage.setItem('ilaw_user_uuid', newId);
-            return newId;
-        }
-
-        let currentUserId = getOrCreateUserId();
-        
-        // Isolate local storage keys per user to prevent cache bleeding
-        const balKey = `ilaw_credits_balance_${currentUserId}`;
-        const spentKey = `ilaw_has_spent_credits_${currentUserId}`;
-
-        // Helper: Cookie storage (Survives LocalStorage wipes)
+        // Helper: Cookie storage
         function setCookie(name, value, days = 365) {
             let expires = "";
             if (days) {
@@ -289,7 +265,7 @@
             return null;
         }
 
-        // Helper: IndexedDB storage (Survives hard refresh and session clearing)
+        // Helper: IndexedDB storage
         const IDB_NAME = 'ILAW_Credit_DB';
         const IDB_STORE = 'credits_store';
         
@@ -312,9 +288,7 @@
                 const db = await initIDB();
                 const tx = db.transaction(IDB_STORE, 'readwrite');
                 tx.objectStore(IDB_STORE).put(val, key);
-            } catch (e) {
-                console.warn('IDB write failed:', e);
-            }
+            } catch (e) { console.warn('IDB write failed:', e); }
         }
 
         async function getIDB(key) {
@@ -326,122 +300,155 @@
                     req.onsuccess = () => resolve(req.result);
                     req.onerror = () => resolve(null);
                 });
-            } catch (e) {
-                return null;
-            }
+            } catch (e) { return null; }
         }
 
-        // Synchronize balance and spent-history across Supabase DB + LocalStorage + SessionStorage + Cookies + IndexedDB
-        async function syncAllStorageLayers(balance, hasSpent) {
-            userCredits = balance;
-            document.getElementById('creditDisplay').textContent = userCredits;
+        // --- ROBUST USER ID & SESSION RESOLUTION ---
+        async function resolveAuthenticatedUserId() {
+            // 1. Check native Supabase Auth session first (handles Dashboard RLS & JWTs)
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session && session.user) {
+                    // Returns email or UUID depending on how your database primary key is structured
+                    return session.user.email || session.user.id; 
+                }
+            } catch (e) { console.warn('Supabase auth check failed:', e); }
+
+            // 2. Check custom Dashboard local storage objects
+            try {
+                const sessionKeys = ['deped_active_session', 'user_session', 'auth_user'];
+                for (const key of sessionKeys) {
+                    const str = localStorage.getItem(key) || sessionStorage.getItem(key);
+                    if (str) {
+                        const parsed = JSON.parse(str);
+                        if (parsed.email) return parsed.email;
+                        if (parsed.id || parsed.user_id || parsed.uuid) return parsed.id || parsed.user_id || parsed.uuid;
+                    }
+                }
+            } catch(e) {}
+
+            // 3. Fallback to existing persistent local UUID
+            let storedId = localStorage.getItem('ilaw_user_uuid') || getCookie('ilaw_user_uuid');
+            if (storedId) return storedId;
             
+            // 4. Generate new UUID only if completely anonymous
+            const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+            localStorage.setItem('ilaw_user_uuid', newId);
+            setCookie('ilaw_user_uuid', newId, 365);
+            return newId;
+        }
+
+        // Syncs local display and browser caches. 
+        // NOTE: Does NOT force-overwrite Supabase DB during read fallbacks to protect real balances.
+        async function syncLocalCacheLayers(balance, hasSpent, syncToRemoteDb = false) {
+            userCredits = balance;
+            const displayEl = document.getElementById('creditDisplay');
+            if (displayEl) displayEl.textContent = userCredits;
+            
+            if (!currentUserId) return;
+            const balKey = `ilaw_credits_balance_${currentUserId}`;
+            const spentKey = `ilaw_has_spent_credits_${currentUserId}`;
             const spentStr = hasSpent ? 'true' : 'false';
 
-            // 1. LocalStorage & SessionStorage
             try {
                 localStorage.setItem(balKey, balance.toString());
                 localStorage.setItem(spentKey, spentStr);
                 sessionStorage.setItem(balKey, balance.toString());
                 sessionStorage.setItem(spentKey, spentStr);
-            } catch (e) { console.warn('LocalStorage error:', e); }
+            } catch (e) {}
 
-            // 2. Persistent Cookies
             setCookie(balKey, balance.toString(), 365);
             setCookie(spentKey, spentStr, 365);
-
-            // 3. IndexedDB
             await setIDB(balKey, balance);
             await setIDB(spentKey, hasSpent);
 
-            // 4. Supabase Remote Database (Single Source of Truth against cache clearing)
-            try {
-                await supabaseClient
-                    .from('user_credits')
-                    .upsert({
-                        user_id: currentUserId,
-                        credits: balance,
-                        has_spent: hasSpent,
-                        updated_at: new Date().toISOString()
-                    }, { onConflict: 'user_id' });
-            } catch (e) {
-                console.warn('Supabase sync warning:', e);
+            // Only push to Supabase during active spending or purchasing, never on cache read fallbacks
+            if (syncToRemoteDb) {
+                try {
+                    await supabaseClient
+                        .from('user_credits')
+                        .upsert({
+                            user_id: currentUserId,
+                            credits: balance,
+                            has_spent: hasSpent,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'user_id' });
+                } catch (e) { console.warn('Supabase remote sync failed:', e); }
             }
         }
 
         async function fetchUserCredits() {
+            currentUserId = await resolveAuthenticatedUserId();
+            const balKey = `ilaw_credits_balance_${currentUserId}`;
+            const spentKey = `ilaw_has_spent_credits_${currentUserId}`;
+
             try {
-                // Step 1: Query Supabase remote database first (survives hard refresh F5/Fn+F5 and cache clears)
-                let remoteBalance = null;
-                let remoteHasSpent = null;
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('user_credits')
-                        .select('credits, has_spent')
-                        .eq('user_id', currentUserId)
-                        .maybeSingle();
+                // Step 1: Query Supabase remote database as Single Source of Truth
+                const { data, error } = await supabaseClient
+                    .from('user_credits')
+                    .select('credits, has_spent')
+                    .eq('user_id', currentUserId)
+                    .maybeSingle();
 
-                    if (!error && data) {
-                        remoteBalance = parseInt(data.credits);
-                        remoteHasSpent = data.has_spent === true || data.has_spent === 'true';
-                    }
-                } catch (dbErr) {
-                    console.warn('Could not fetch from Supabase, checking local layers:', dbErr);
-                }
-
-                // Enforce Supabase database record strictly if present
-                if (remoteBalance !== null && !isNaN(remoteBalance)) {
-                    await syncAllStorageLayers(remoteBalance, remoteHasSpent);
+                if (!error && data && data.credits !== undefined && data.credits !== null) {
+                    const remoteBalance = parseInt(data.credits);
+                    const remoteHasSpent = data.has_spent === true || data.has_spent === 'true';
+                    
+                    // DB is authoritative: update local UI and caches without re-writing to DB
+                    await syncLocalCacheLayers(remoteBalance, remoteHasSpent, false);
                     return;
                 }
+            } catch (dbErr) {
+                console.warn('Remote DB fetch error, falling back to local caches:', dbErr);
+            }
 
-                // Step 2: Fallback to querying client storage layers (LocalStorage, Cookie, IndexedDB, SessionStorage)
-                const lsBalance = localStorage.getItem(balKey);
-                const cookieBalance = getCookie(balKey);
-                const idbBalance = await getIDB(balKey);
-                const ssBalance = sessionStorage.getItem(balKey);
+            // Step 2: Fallback to local storage layers ONLY if remote DB row is missing or offline
+            const lsBalance = localStorage.getItem(balKey);
+            const cookieBalance = getCookie(balKey);
+            const idbBalance = await getIDB(balKey);
+            const ssBalance = sessionStorage.getItem(balKey);
 
-                const lsSpent = localStorage.getItem(spentKey) === 'true';
-                const cookieSpent = getCookie(spentKey) === 'true';
-                const idbSpent = (await getIDB(spentKey)) === true || (await getIDB(spentKey)) === 'true';
-                const ssSpent = sessionStorage.getItem(spentKey) === 'true';
+            const hasSpentAnywhere = [
+                localStorage.getItem(spentKey),
+                getCookie(spentKey),
+                await getIDB(spentKey),
+                sessionStorage.getItem(spentKey)
+            ].some(v => v === 'true' || v === true);
 
-                const hasSpentAnywhere = lsSpent || cookieSpent || idbSpent || ssSpent;
+            const candidates = [lsBalance, cookieBalance, idbBalance, ssBalance]
+                .map(v => parseInt(v))
+                .filter(v => !isNaN(v) && v !== null);
 
-                // Gather existing numeric balances from any surviving storage layer
-                let foundBalance = null;
-                const candidates = [lsBalance, cookieBalance, idbBalance, ssBalance]
-                    .map(v => parseInt(v))
-                    .filter(v => !isNaN(v) && v !== null);
-
-                if (candidates.length > 0) {
-                    // Prioritize the lowest found balance if credits were ever spent to prevent hard-refresh exploits
-                    foundBalance = hasSpentAnywhere ? Math.min(...candidates) : candidates[0];
-                }
-
-                // Step 3: Strictly assign balance without granting free resets
-                if (foundBalance !== null) {
-                    await syncAllStorageLayers(foundBalance, hasSpentAnywhere || foundBalance < 5);
-                } else if (hasSpentAnywhere) {
-                    // Cache was partially cleared after spending credits: maintain 0 balance
-                    await syncAllStorageLayers(0, true);
-                } else {
-                    // First-time user initialization
-                    await syncAllStorageLayers(5, false);
-                }
-            } catch (err) {
-                console.error('Failed to load credits:', err);
-                userCredits = localStorage.getItem(balKey) ? parseInt(localStorage.getItem(balKey)) : 5;
-                if (isNaN(userCredits)) userCredits = 5;
-                document.getElementById('creditDisplay').textContent = userCredits;
+            if (candidates.length > 0) {
+                const foundBalance = hasSpentAnywhere ? Math.min(...candidates) : candidates[0];
+                await syncLocalCacheLayers(foundBalance, hasSpentAnywhere || foundBalance < 5, false);
+            } else {
+                // Initial default balance for completely new users
+                await syncLocalCacheLayers(5, false, true);
             }
         }
         
+        // Initialize fetch on load
         fetchUserCredits();
+
+        // Listen for cross-tab balance updates (e.g., if user tops up or spends credits in the Dashboard tab)
+        window.addEventListener('storage', (event) => {
+            if (currentUserId && event.key === `ilaw_credits_balance_${currentUserId}`) {
+                const newBal = parseInt(event.newValue);
+                if (!isNaN(newBal)) {
+                    userCredits = newBal;
+                    const displayEl = document.getElementById('creditDisplay');
+                    if (displayEl) displayEl.textContent = userCredits;
+                }
+            }
+        });
 
         function hasEnoughCredits() {
             if (userCredits < 2) {
-                modal.classList.remove('hidden');
+                if (modal) modal.classList.remove('hidden');
                 return false;
             }
             return true;
@@ -449,16 +456,20 @@
 
         async function deductCreditAfterSuccess() {
             userCredits -= 2;
-            if (userCredits < 0) userCredits = 0; // Prevent negatives
+            if (userCredits < 0) userCredits = 0;
             
-            await syncAllStorageLayers(userCredits, true); 
+            // Pass true to explicitly push the deducted balance to the remote Supabase database
+            await syncLocalCacheLayers(userCredits, true, true); 
             
             if (userCredits < 2) {
-                setTimeout(() => {
-                    modal.classList.remove('hidden');
+                setTimeout(() => { 
+                    if (modal) modal.classList.remove('hidden'); 
                 }, 1000); 
             }
         }
+        // ========================================
+        // --- END OF CREDIT SYSTEM REPLACEMENT ---
+        // ========================================
 
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
         document.getElementById('headerTopUpBtn').addEventListener('click', () => modal.classList.remove('hidden'));
