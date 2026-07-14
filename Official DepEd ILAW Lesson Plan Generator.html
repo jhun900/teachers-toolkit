@@ -451,15 +451,56 @@
         }
 
         async function deductCreditAfterSuccess() {
-            userCredits -= 2;
-            if (userCredits < 0) userCredits = 0;
-            await syncLocalCacheLayers(userCredits, true, true); 
-            if (userCredits < 2) {
-                setTimeout(() => { 
-                    if (modal) modal.classList.remove('hidden'); 
-                }, 1000); 
-            }
+    try {
+        // 1. Get current authenticated user from Supabase
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) throw new Error("User session not found");
+        
+        const email = user.email;
+
+        // 2. Fetch current credits from Supabase to ensure accurate deduction
+        const { data, error: fetchError } = await supabase
+            .from('user_credits') // Change this to match your exact Supabase table name
+            .select('credits')
+            .eq('email', email)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        const currentCredits = data.credits;
+        if (currentCredits <= 0) {
+            alert("Insufficient credits to complete export!");
+            return false;
         }
+
+        const newCredits = currentCredits - 1;
+
+        // 3. Update Supabase
+        const { error: updateError } = await supabase
+            .from('user_credits')
+            .update({ credits: newCredits })
+            .eq('email', email);
+
+        if (updateError) throw updateError;
+
+        // 4. CRITICAL SYNC: Update the exact local storage key the dashboard reads
+        localStorage.setItem(`credits_pool_${email}`, newCredits);
+        
+        // Optional: Update local UI element if present on the generator page
+        const creditDisplay = document.getElementById('user_credits_count');
+        if (creditDisplay) {
+            creditDisplay.textContent = `${newCredits} Credits`;
+        }
+
+        console.log(`Sync Successful: ${email} now has ${newCredits} credits.`);
+        return true;
+
+    } catch (error) {
+        console.error("Failed to sync and deduct credits:", error);
+        alert("System error tracking your export credit. Please refresh and try again.");
+        return false;
+    }
+}
 
         document.getElementById('closeModalBtn').addEventListener('click', () => modal.classList.add('hidden'));
         document.getElementById('headerTopUpBtn').addEventListener('click', () => modal.classList.remove('hidden'));
