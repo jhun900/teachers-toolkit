@@ -305,16 +305,25 @@
 
         // --- ROBUST USER ID & SESSION RESOLUTION ---
         async function resolveAuthenticatedUserId() {
-            // 1. Check native Supabase Auth session first (handles Dashboard RLS & JWTs)
+            // 1. Check URL parameters first (Easiest way to sync between Dashboard & Tool domains)
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlUserId = urlParams.get('userId') || urlParams.get('user_id') || urlParams.get('uid');
+            if (urlUserId) {
+                // Save it locally so it persists if they refresh without the query parameter
+                localStorage.setItem('ilaw_user_uuid', urlUserId);
+                setCookie('ilaw_user_uuid', urlUserId, 365);
+                return urlUserId;
+            }
+
+            // 2. Check native Supabase Auth session (works if on the same domain)
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session && session.user) {
-                    // Returns email or UUID depending on how your database primary key is structured
-                    return session.user.email || session.user.id; 
+                    return session.user.id || session.user.email; 
                 }
             } catch (e) { console.warn('Supabase auth check failed:', e); }
 
-            // 2. Check custom Dashboard local storage objects
+            // 3. Check custom Dashboard local storage objects
             try {
                 const sessionKeys = ['deped_active_session', 'user_session', 'auth_user'];
                 for (const key of sessionKeys) {
@@ -327,11 +336,11 @@
                 }
             } catch(e) {}
 
-            // 3. Fallback to existing persistent local UUID
+            // 4. Fallback to existing persistent local UUID
             let storedId = localStorage.getItem('ilaw_user_uuid') || getCookie('ilaw_user_uuid');
             if (storedId) return storedId;
             
-            // 4. Generate new UUID only if completely anonymous
+            // 5. Generate new UUID only if completely anonymous
             const newId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                 const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
