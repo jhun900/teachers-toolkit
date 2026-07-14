@@ -236,7 +236,7 @@
         
         // --- STRICT MULTI-LAYER STORAGE & SUPABASE CREDIT SYSTEM ---
         const SUPABASE_URL = 'https://knfpnuofjxihwutuzbnd.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4dXpyanBwYXVzamxka3lmcGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NTUzMDcsImV4cCI6MjA5OTQzMTMwN30.alC3JldmwWoR9x2k1BnjyNuZcaDTk_-V2VtPdFh56sk';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuZnBudW9manhpaHd1dHV6Ym5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NzU2MTksImV4cCI6MjA5OTM1MTYxOX0.vqhn-f8ZXZjLgbgvnagRehiL-v0zhTi5G8w863iBHlY';
         
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const modal = document.getElementById('buyCreditsModal');
@@ -503,7 +503,6 @@
             });
         });
         
-        // --- PAYMONGO PAYMENT TRIGGER ---
         // --- PAYMONGO PAYMENT TRIGGER ---
         document.getElementById('purchaseBtn').addEventListener('click', async () => {
             const btn = document.getElementById('purchaseBtn');
